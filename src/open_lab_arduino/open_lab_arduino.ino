@@ -186,9 +186,7 @@ void setup(){
   }
 
   // activate interrupt service routines
-  // ...
-  // ...
-  // ...
+  activateISR();
 
 }
 
