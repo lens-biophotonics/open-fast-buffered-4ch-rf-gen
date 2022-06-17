@@ -550,11 +550,10 @@ void initDigitalPins(){
   pinMode(c_ChipSel, OUTPUT);
   digitalWriteFast(c_ChipSel, LOW);
 
-  // set DUC update interrupt pin as input
+  // set DUC update interrupt pins as input
   pinMode(c_UpdateInterrupt, INPUT_PULLUP);
-
-  // NOTE: add other interrupt pins/signals
-  // ...
+  pinMode(c_SoftResetInterrupt, INPUT_PULLUP);
+  pinMode(c_HardResetInterrupt, INPUT_PULLUP);
 
 }
 
