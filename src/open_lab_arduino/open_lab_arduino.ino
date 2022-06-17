@@ -28,14 +28,14 @@ unsigned long g_starTime;
 unsigned long g_byteCount = 0;
 
 
-// digital pins (to AD9959 DDS)            Color     Connection         Function
-const byte c_PwnDwn    = 2;             // brown  /  output to DUC   /  DUC power down
-const byte c_HardReset = 3;             // pink   /  output to DUC   /  DUC master reset
-const byte c_IOUpdate  = 5;             // blue   /  output to DUC   /  data I/O update 
-const byte c_ChipSel   = 10;            // pink   /  output to DUC   /  DUC chip select
-const byte c_HardResetInterrupt = 28;   // XXXX   /  input           /  trigger DUC hard reset routine
-const byte c_SoftResetInterrupt = 30;   // XXXX   /  input           /  trigger MCU soft reset routine
-const byte c_UpdateInterrupt    = 32;   // XXXX   /  input           /  trigger DUC update routine
+// digital pins (to AD9959 DDS)            Connection         Function
+const byte c_PwnDwn    = 2;             // output to DUC   /  DUC power-down control
+const byte c_HardReset = 3;             // output to DUC   /  DUC master reset
+const byte c_IOUpdate  = 5;             // output to DUC   /  data I/O update 
+const byte c_ChipSel   = 10;            // output to DUC   /  DUC chip select
+const byte c_HardResetInterrupt = 28;   // input           /  trigger DUC hard reset routine
+const byte c_SoftResetInterrupt = 30;   // input           /  trigger MCU soft reset routine
+const byte c_UpdateInterrupt    = 32;   // input           /  trigger DUC update routine
 
 // quad-SPI (data pins ordered from msb to lsb, + SCLK)
 const byte c_quadSPIPins[5] = {15, 14, 18, 19, 40};
@@ -539,6 +539,7 @@ void initDigitalPins(){
   digitalWriteFast(c_HardReset, LOW);
 
   // set power down pin as output, set it LOW
+  // (DUC external power-down control is unused)
   pinMode(c_PwnDwn, OUTPUT);
   digitalWriteFast(c_PwnDwn, LOW);
 
