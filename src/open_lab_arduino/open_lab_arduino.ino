@@ -589,11 +589,7 @@ void initFTWBuffers(){
     g_bufferFSRRCh1[i] = 0;
     g_bufferFSRRCh2[i] = 0;
     g_bufferFSRRCh3[i] = 0;
-
   }
-
-  // "safety" delay: wait 10ms
-  delay(10);
 
 }
 
