@@ -1,0 +1,9 @@
+# ignored files
+platformio.ini
+
+# ignored folders
+include
+lib
+test
+.pio
+.vscode/
