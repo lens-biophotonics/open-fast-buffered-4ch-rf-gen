@@ -74,7 +74,7 @@ const float c_RefClk  = 25;
 const float c_SysClk  = c_PLLDiv * c_RefClk;  //  [MHz]   DDS SYS_CLK  = PLL factor * REF_CLK = 20 * 25 MHz = 500 MHz
 const float c_SyncClk = 0.25*c_SysClk;        //  [MHz]   DDS SYNC_CLK = 0.25 * SYS_CLK = 125 MHz
 const byte  c_Tassert = 1;                    //  [μs]    DDS master reset and I/O update assert time 
-                                         //          (must be higher than 1/SYNC_CLK μs, i.e. 8 ns)
+                                              //          (must be higher than 1/SYNC_CLK μs, i.e. 8 ns)
 
 // AD9959 bit precision
 const byte c_DDSbits = 32; 
@@ -613,15 +613,15 @@ void softResetBoard(){
   g_byteCount = 0;
     
   // reset indices
-  g_inCh0    = 0;   // input
-  g_inCh1    = 0;
-  g_inCh2    = 0;
-  g_inCh3    = 0;
-  g_numOut    = 0;    // output
-  g_outCh0  = 0;
-  g_outCh1  = 0;
-  g_outCh2  = 0;
-  g_outCh3  = 0;
+  g_inCh0  = 0;   // input
+  g_inCh1  = 0;
+  g_inCh2  = 0;
+  g_inCh3  = 0;
+  g_numOut = 0;   // output
+  g_outCh0 = 0;
+  g_outCh1 = 0;
+  g_outCh2 = 0;
+  g_outCh3 = 0;
 
   // reset FTW buffers
   initFTWBuffers();
