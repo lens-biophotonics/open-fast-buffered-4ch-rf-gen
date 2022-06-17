@@ -80,7 +80,23 @@ const byte  c_Tassert = 1;                    //  [μs]    DDS master reset and 
 const byte c_DDSbits = 32; 
 
 // AD9959 DAC channels
-const byte c_Nch  = 4;
+const byte c_Nch = 4;
+const byte c_Ch0 = 0;
+const byte c_Ch1 = 1;
+const byte c_Ch2 = 2;
+const byte c_Ch3 = 3;
+const byte c_Ch0Ch1 = 10;
+const byte c_Ch0Ch2 = 20;
+const byte c_Ch0Ch3 = 30;
+const byte c_Ch1Ch2 = 12;
+const byte c_Ch1Ch3 = 13;
+const byte c_Ch2Ch3 = 23;
+const byte c_Ch1Ch2Ch3 = 123;
+const byte c_Ch0Ch1Ch3 = 130;
+const byte c_Ch0Ch1Ch2 = 210;
+const byte c_Ch0Ch2Ch3 = 230;
+const byte c_ChAll = 4;
+
 
 // AD9959 register addresses
 const byte c_CSR     = 0x00;  // Channel Selection Register
@@ -509,7 +525,7 @@ void setPLLDivider(){
   bufferFR1[3] = 0b00100000;    // FR1[5] = 1  OUT SYNC_CLK pin disabled
 
   // select all DDS channels
-  selectDDSChannels(4);
+  selectDDSChannels(c_ChAll);
 
   // transfer word to DDS via quad-SPI
   digitalWriteFast(c_ChipSel, LOW);
@@ -866,10 +882,10 @@ void selectDDSChannels(byte ch){
   byte bufferChSel[c_SelSize];
   bufferChSel[0] = c_CSR;
   switch (ch){
-    case 0:
+    case c_Ch0:
       bufferChSel[1] = ch0;
       break;
-    case 1:
+    case c_Ch1:
       bufferChSel[1] = ch1;
       break;
     case 2:
@@ -878,37 +894,37 @@ void selectDDSChannels(byte ch){
     case 3:
       bufferChSel[1] = ch3;
       break;
-    case 4:
+    case c_ChAll:
       bufferChSel[1] = ch0 | ch1 | ch2 | ch3;
       break;
-    case 10:
+    case c_Ch0Ch1:
       bufferChSel[1] = ch0 | ch1;
       break;
-    case 20:
+    case c_Ch0Ch2:
       bufferChSel[1] = ch0 | ch2;
       break;
-    case 30:
+    case c_Ch0Ch3:
       bufferChSel[1] = ch0 | ch3;
       break;
-    case 12:
+    case c_Ch1Ch2:
       bufferChSel[1] = ch1 | ch2;
       break;
-    case 13:
+    case c_Ch1Ch3:
       bufferChSel[1] = ch1 | ch3;
       break;
-    case 23:
+    case c_Ch2Ch3:
       bufferChSel[1] = ch2 | ch3;
       break;
-    case 123:
+    case c_Ch1Ch2Ch3:
       bufferChSel[1] = ch1 | ch2 | ch3;
       break;
-    case 130:
+    case c_Ch0Ch1Ch3:
       bufferChSel[1] = ch0 | ch1 | ch3;
       break;
-    case 210:
+    case c_Ch0Ch1Ch2:
       bufferChSel[1] = ch0 | ch1 | ch2;
       break;
-    case 230:
+    case c_Ch0Ch2Ch3:
       bufferChSel[1] = ch0 | ch2 | ch3;
       break;
     default:
