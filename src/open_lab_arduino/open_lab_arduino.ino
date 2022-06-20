@@ -72,7 +72,7 @@ const byte c_QuadSclkDiv = 2;
 const byte  c_PLLDiv  = 20;
 const float c_RefClk  = 25; 
 const float c_SysClk  = c_PLLDiv * c_RefClk;  //  [MHz]   DDS SYS_CLK  = PLL factor * REF_CLK = 20 * 25 MHz = 500 MHz
-const float c_SyncClk = 0.25*c_SysClk;        //  [MHz]   DDS SYNC_CLK = 0.25 * SYS_CLK = 125 MHz
+const float c_SyncClk = 0.25 * c_SysClk;      //  [MHz]   DDS SYNC_CLK = 0.25 * SYS_CLK = 125 MHz
 const byte  c_Tassert = 1;                    //  [μs]    DDS master reset and I/O update assert time 
                                               //          (must be higher than 1/SYNC_CLK μs, i.e. 8 ns)
 
@@ -81,7 +81,11 @@ const byte c_DDSbits = 32;
 
 // AD9959 DAC channels
 const byte c_Nch = 4;
-const byte c_Ch0 = 0;
+const byte c_chSel0 = 0b00010110; // selection bytes
+const byte c_chSel1 = 0b00100110;
+const byte c_chSel2 = 0b01000110;
+const byte c_chSel3 = 0b10000110;
+const byte c_Ch0 = 0;             // custom IDs
 const byte c_Ch1 = 1;
 const byte c_Ch2 = 2;
 const byte c_Ch3 = 3;
@@ -139,7 +143,7 @@ volatile unsigned int g_outCh2 = 0;   // channel 2 memory index (out)
 volatile unsigned int g_outCh3 = 0;   // channel 3 memory index (out)
 
 // frequency tuning word buffers
-const unsigned int c_maxSize = 6400;     // max buffer size
+const unsigned int c_maxSize = 5500;     // max buffer size
 unsigned int g_bufferFTW0Ch0[c_maxSize]; // channel 0 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)
 unsigned int g_bufferFTW1Ch0[c_maxSize]; // channel 0 buffer: chirp end frequency tuning word (Linear Sweep Mode only)             
 unsigned int g_bufferFTW0Ch1[c_maxSize]; // channel 1 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)      
@@ -169,6 +173,9 @@ byte         g_bufferFSRRCh3[c_maxSize]; // channel 3 buffer: Falling Step Ramp 
 
 // channel selection mask buffer
 byte g_bufferSelMask[c_maxSize * 4];
+
+// channel operation mode mask buffer
+byte g_bufferModeMask[c_maxSize * 4];
 
 
 
@@ -247,10 +254,7 @@ void readSerialPort(){
     // convert incoming bytes to char,
     // add them to string as long as they are not a newline
     if (inChar != '\n') g_inString += inChar;
-    else{
-
-      // get string header
-      g_hdrString = g_inString.substring(0, 3);     
+    else{   
         
       // decode instruction strings
       if (g_inString != "END") decodeInstructionString();
@@ -270,7 +274,6 @@ void readSerialPort(){
 
       // delete strings
       g_inString  = "";
-      g_hdrString = "";
 
     }
 
@@ -484,9 +487,105 @@ String getValue(const String &data, char separator, int index){
  * Decode input instruction strings and store data into memory buffers
  */
 void decodeInstructionString(){
-  // code here
+  
+  // decode configuration header
+  byte cfgHdr;
+  cfgHdr = (byte)g_inString.charAt(0);
+
+  // decode channel selection nibble
+  decodeChannelSelectionNibble(cfgHdr);
+
+  // decode operation mode nibble
+  decodeChannelModeNibble(cfgHdr);
+    
+  // remove char header
+  g_inString.remove(0, 1);
+
+  // decode the remaining instruction string here
   // ...
-  // ...
+  // ...    
+
+}
+
+
+/**
+ * Decode channel selection nibble
+ * @param[in] cfgHdr configuration char header
+ */
+void decodeChannelSelectionNibble(byte cfgHdr){
+
+  // programmed channels selection: first nibble
+  byte chSelByte = (cfgHdr & c_Mask8Nibble04) | 0b00000110;
+
+  // fill channel selection buffer
+  switch (chSelByte){
+    case c_chSel0:
+      g_bufferSelMask[g_numIn] = c_Ch0;
+      break;
+    case c_chSel1:
+      g_bufferSelMask[g_numIn] = c_Ch1;
+      break;
+    case c_chSel2:
+      g_bufferSelMask[g_numIn] = c_Ch2;
+      break;
+    case c_chSel3:
+      g_bufferSelMask[g_numIn] = c_Ch3;
+      break;
+    case c_chSel0 | c_chSel1 | c_chSel2 | c_chSel3:
+      g_bufferSelMask[g_numIn] = c_ChAll;
+      break;
+    case c_chSel0 | c_chSel1:
+      g_bufferSelMask[g_numIn] = c_Ch0Ch1;
+      break;
+    case c_chSel0 | c_chSel2:
+      g_bufferSelMask[g_numIn] = c_Ch0Ch2;
+      break;
+    case c_chSel0 | c_chSel3:
+      g_bufferSelMask[g_numIn] = c_Ch0Ch3;
+      break;
+    case c_chSel1 | c_chSel2:
+      g_bufferSelMask[g_numIn] = c_Ch1Ch2;
+      break;
+    case c_chSel1 | c_chSel3:
+      g_bufferSelMask[g_numIn] = c_Ch1Ch3;
+      break;
+    case c_chSel2 | c_chSel3:
+      g_bufferSelMask[g_numIn] = c_Ch2Ch3;
+      break;
+    case c_chSel1 | c_chSel2 | c_chSel3:
+      g_bufferSelMask[g_numIn] = c_Ch1Ch2Ch3;
+      break;
+    case c_chSel0 | c_chSel1 | c_chSel3:
+      g_bufferSelMask[g_numIn] = c_Ch0Ch1Ch3;
+      break;
+    case c_chSel0 | c_chSel1 | c_chSel2:
+      g_bufferSelMask[g_numIn] = c_Ch0Ch1Ch2;
+      break;
+    case c_chSel0 | c_chSel2 | c_chSel3:
+      g_bufferSelMask[g_numIn] = c_Ch0Ch2Ch3;
+      break;
+    default:
+      // no DAC channel selected
+      g_bufferSelMask[g_numIn] = 0b00000110;
+      break;
+  }
+
+}
+
+
+/**
+ * Decode channel operation mode nibble
+ * (0: Single-Tone mode; 1: Linear Sweep mode)
+ * @param[in] cfgHdr configuration char header
+ */
+void decodeChannelModeNibble(byte cfgHdr){
+
+  // channels operation mode: second nibble
+  byte chModByte = ((cfgHdr & c_Mask8Nibble14) << 4) | 0b00000110;
+
+  // fill channel operation mode buffer
+  g_bufferModeMask[g_numIn] = chModByte;
+
 }
 
 
@@ -872,60 +971,54 @@ void activateChLSM(byte ch){
  */
 void selectDDSChannels(byte ch){
 
-  // channel selection bytes
-  const byte ch0 = 0b00010110;
-  const byte ch1 = 0b00100110;
-  const byte ch2 = 0b01000110;
-  const byte ch3 = 0b10000110;
-
   // selection
   byte bufferChSel[c_SelSize];
   bufferChSel[0] = c_CSR;
   switch (ch){
     case c_Ch0:
-      bufferChSel[1] = ch0;
+      bufferChSel[1] = c_chSel0;
       break;
     case c_Ch1:
-      bufferChSel[1] = ch1;
+      bufferChSel[1] = c_chSel1;
       break;
     case 2:
-      bufferChSel[1] = ch2;
+      bufferChSel[1] = c_chSel2;
       break;
     case 3:
-      bufferChSel[1] = ch3;
+      bufferChSel[1] = c_chSel3;
       break;
     case c_ChAll:
-      bufferChSel[1] = ch0 | ch1 | ch2 | ch3;
+      bufferChSel[1] = c_chSel0 | c_chSel1 | c_chSel2 | c_chSel3;
       break;
     case c_Ch0Ch1:
-      bufferChSel[1] = ch0 | ch1;
+      bufferChSel[1] = c_chSel0 | c_chSel1;
       break;
     case c_Ch0Ch2:
-      bufferChSel[1] = ch0 | ch2;
+      bufferChSel[1] = c_chSel0 | c_chSel2;
       break;
     case c_Ch0Ch3:
-      bufferChSel[1] = ch0 | ch3;
+      bufferChSel[1] = c_chSel0 | c_chSel3;
       break;
     case c_Ch1Ch2:
-      bufferChSel[1] = ch1 | ch2;
+      bufferChSel[1] = c_chSel1 | c_chSel2;
       break;
     case c_Ch1Ch3:
-      bufferChSel[1] = ch1 | ch3;
+      bufferChSel[1] = c_chSel1 | c_chSel3;
       break;
     case c_Ch2Ch3:
-      bufferChSel[1] = ch2 | ch3;
+      bufferChSel[1] = c_chSel2 | c_chSel3;
       break;
     case c_Ch1Ch2Ch3:
-      bufferChSel[1] = ch1 | ch2 | ch3;
+      bufferChSel[1] = c_chSel1 | c_chSel2 | c_chSel3;
       break;
     case c_Ch0Ch1Ch3:
-      bufferChSel[1] = ch0 | ch1 | ch3;
+      bufferChSel[1] = c_chSel0 | c_chSel1 | c_chSel3;
       break;
     case c_Ch0Ch1Ch2:
-      bufferChSel[1] = ch0 | ch1 | ch2;
+      bufferChSel[1] = c_chSel0 | c_chSel1 | c_chSel2;
       break;
     case c_Ch0Ch2Ch3:
-      bufferChSel[1] = ch0 | ch2 | ch3;
+      bufferChSel[1] = c_chSel0 | c_chSel2 | c_chSel3;
       break;
     default:
       bufferChSel[1] = 0b00000110;
