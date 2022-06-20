@@ -1187,6 +1187,23 @@ void ioUpdate(){
 }
 
 
+/**
+ * Check if k-th bit in byte n is set.
+ * 
+ * @param[in] b input byte to check
+ * @param[in] p checked position
+ * 
+ * @returns true if p-th bit is set, false otherwise
+ */
+bool isBitSet(byte b, byte p){
+
+  bool isSet = (b >> (p - 1)) & 1;
+
+  return isSet;
+
+}
+
+
 
 
 // Print functions
