@@ -121,7 +121,7 @@ const byte c_CFRSize = 4;
 
 // input to MCU board
 String g_inString  = "";      // input instruction string
-String g_hdrString = "";      // instruction string header
+float g_parsedValues[24];     // array of parsed values
 unsigned int g_numIn = 0;     // overall input setting counter
 unsigned int g_inCh0 = 0;     // channel 0 memory index (in)
 unsigned int g_inCh1 = 0;     // channel 1 memory index (in)
@@ -491,19 +491,30 @@ void decodeInstructionString(){
   // decode configuration header
   byte cfgHdr;
   cfgHdr = (byte)g_inString.charAt(0);
+  g_inString.remove(0, 1);
 
   // decode channel selection nibble
   decodeChannelSelectionNibble(cfgHdr);
 
   // decode operation mode nibble
   decodeChannelModeNibble(cfgHdr);
-    
-  // remove char header
-  g_inString.remove(0, 1);
 
-  // decode the remaining instruction string here
-  // ...
-  // ...    
+  // parse incoming data
+  parseInstructionString();
+
+  // backward loop over channels (from 3 to 0)
+  byte offset = 0;
+  for (byte i = c_Nch - 1; i >= 0; i--){
+
+    // 1. check channel selection bit in cfgHdr
+
+    // 2. if channel is selected, check channel mode bit in cfgHdr
+
+    // 3a. if 1 (LSM), consider 6 values starting from offset
+
+    // 3b. if 0 (STM), consider 1 value starting from offset
+
+  }
 
 }
 
@@ -585,6 +596,24 @@ void decodeChannelModeNibble(byte cfgHdr){
 
   // fill channel operation mode buffer
   g_bufferModeMask[g_numIn] = chModByte;
+
+}
+
+
+/**
+ * Parse comma-separated instruction string
+ * 
+ */
+void parseInstructionString(){
+
+byte v = 0;
+int start_idx = -1;
+int sep_idx = g_inString.indexOf(',', start_idx + 1);
+while (sep_idx != -1){  
+  g_parsedValues[v] = (g_inString.substring(start_idx, sep_idx)).toFloat();
+  sep_idx = g_inString.indexOf(',', start_idx + 1);
+  v++;  
+}
 
 }
 
