@@ -116,7 +116,7 @@ const byte c_CFTW1   = 0x0A;  // Channel Frequency Tuning Word 1 (chirp maximum 
 // AD9959 register sizes
 const byte c_SelSize = 2;
 const byte c_FR1Size = 4;
-const byte c_CFRSize = 4;
+const byte c_CFRSize = 6;
 
 
 // input to MCU board
@@ -169,7 +169,8 @@ byte         g_bufferFSRRCh3[c_maxSize]; // channel 3 buffer: Falling Step Ramp 
 byte g_bufferSelMask[c_maxSize * 4];
 
 // channel operation mode mask buffer
-byte g_bufferModeMask[c_maxSize * 4];
+byte g_bufferSingleToneMode[c_maxSize * 4];
+byte g_bufferLinearSweepMode[c_maxSize * 4];
 
 
 
@@ -377,10 +378,12 @@ void decodeChannelSelectionNibble(byte cfgHdr){
 void decodeChannelModeNibble(byte cfgHdr){
 
   // channels operation mode: second nibble
-  byte chModByte = ((cfgHdr & c_Mask8Nibble14) << 4) | 0b00000110;
+  byte chLSModByte = ((cfgHdr & c_Mask8Nibble14) << 4) | 0b00000110;
+  byte chSTModByte = (~((cfgHdr & c_Mask8Nibble14) << 4) & (cfgHdr & c_Mask8Nibble04)) | 0b00000110;
 
-  // fill channel operation mode buffer
-  g_bufferModeMask[g_numIn] = chModByte;
+  // fill channel operation mode buffers
+  g_bufferSingleToneMode[g_numIn]  = chSTModByte;
+  g_bufferLinearSweepMode[g_numIn] = chLSModByte;
 
 }
 
@@ -745,9 +748,16 @@ void ddsUpdate(){
   // deactivate interrupts
   deactivateISR();
 
-  // code here
-  // ...
-  // ...
+  // activate channel operation modes (updated channels)
+  activateChSTM(g_bufferSingleToneMode[g_numOut]);
+  activateChLSM(g_bufferLinearSweepMode[g_numOut]);
+
+  // transfer ST and LS configurations to DUC
+  // code here...
+  // code here...
+
+  // increase overall output counter
+  g_numOut++;
 
   // activate interrupts
   activateISR();
@@ -875,18 +885,19 @@ void spiTransferChLS(byte ch, unsigned int FTW0, unsigned int FTW1,
 // DUC configuration functions
 /**
  * Activate the Single-Tone operation mode of the AD9959 DDS
+ * on desired input channels.
+ * @param[in] chSelMask DUC channel selection mask
  */
-void activateChSTM(byte ch){
+void activateChSTM(byte chSelMask){
 
   // Channel Function Register bytes
   byte bufferCFR[c_CFRSize];      
-  bufferCFR[0] = c_CFR;
-  bufferCFR[1] = 0x02;
-  bufferCFR[2] = 0x03;
-  bufferCFR[3] = 0x00;
-
-  // select DDS channel
-  selectDDSChannels(ch);
+  bufferCFR[0] = c_CSR;
+  bufferCFR[1] = chSelMask;
+  bufferCFR[2] = c_CFR;
+  bufferCFR[3] = 0x02;
+  bufferCFR[4] = 0x03;
+  bufferCFR[5] = 0x00;
 
   // transfer word to DDS via quad-SPI
   digitalWriteFast(c_ChipSel, LOW);
@@ -901,24 +912,25 @@ void activateChSTM(byte ch){
 
 /**
  * Activate the Linear Sweep operation mode of the AD9959 DDS
+ * on desired input channels.
+ * @param[in] chSelMask DUC channel selection mask
  */
-void activateChLSM(byte ch){
+void activateChLSM(byte chSelMask){
 
   // Channel Function Register bytes
-  byte bufferCFR[c_CFRSize];      
-  bufferCFR[0] = c_CFR;
-  bufferCFR[1] = 0b10000000;    // CFR[23:22]: Select Frequency Sweep (= 10);
+  byte bufferCFR[c_CFRSize];
+  bufferCFR[0] = c_CSR;
+  bufferCFR[1] = chSelMask;
+  bufferCFR[2] = c_CFR;
+  bufferCFR[3] = 0b10000000;    // CFR[23:22]: Select Frequency Sweep (= 10);
                                 // CFR[21:16]: Open 
-  bufferCFR[2] = 0b01000011;    // CFR[15]:    Dwell mode             (=0 no-dwell disabled)
+  bufferCFR[4] = 0b01000011;    // CFR[15]:    Dwell mode             (=0 no-dwell disabled)
                                 // CFR[14]:    Linear Sweep Enable    (=1)
                                 // CFR[13]:    Load SRR at I/O Update (=0 the linear sweep ramp rate timer is loaded only upon timeout (timer=1) and is not loaded because of an I/O update pulse)
                                 // CFR[12:11]: Open
                                 // CFR[10]:    0
                                 // CFR[9:8]:   DAC full-scale         (=11 full-scale enabled)
-  bufferCFR[3] = 0b00000000;    // CFR[7:0]    (DEFAULT VALUE: 0x02)
-
-  // select DDS channel
-  selectDDSChannels(ch);
+  bufferCFR[5] = 0b00000000;    // CFR[7:0]    (DEFAULT VALUE: 0x02)
 
   // transfer word to DDS via quad-SPI
   digitalWriteFast(c_ChipSel, LOW);
