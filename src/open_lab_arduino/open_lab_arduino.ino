@@ -22,10 +22,10 @@
 
 // PC serial communication
 bool g_clientCXN = false;               // USB serial connection established
-bool g_startCOM  = true;                // start serial communication flag
+volatile bool g_startCOM = true;        // start serial communication flag
 unsigned long g_currenTime;
 unsigned long g_starTime;
-unsigned long g_byteCount = 0;
+volatile unsigned long g_byteCount = 0;
 
 
 // digital pins (to AD9959 DDS)            Connection         Function
@@ -110,13 +110,13 @@ const byte c_CFRSize = 6;
 
 
 // input to MCU board
-String g_inString  = "";      // input instruction string
-float g_parsedValues[24];     // array of parsed values
-unsigned int g_numIn = 0;     // overall input setting counter
-unsigned int g_inCh0 = 0;     // channel 0 memory index (in)
-unsigned int g_inCh1 = 0;     // channel 1 memory index (in)
-unsigned int g_inCh2 = 0;     // channel 2 memory index (in)
-unsigned int g_inCh3 = 0;     // channel 3 memory index (in)
+String g_inString  = "";              // input instruction string
+float g_parsedValues[24];             // array of parsed values
+volatile unsigned int g_numIn = 0;    // overall input setting counter
+volatile unsigned int g_inCh0 = 0;    // channel 0 memory index (in)
+volatile unsigned int g_inCh1 = 0;    // channel 1 memory index (in)
+volatile unsigned int g_inCh2 = 0;    // channel 2 memory index (in)
+volatile unsigned int g_inCh3 = 0;    // channel 3 memory index (in)
 
 
 // output from MCU board
@@ -156,8 +156,8 @@ byte         g_bufferFSRRCh2[c_maxSize]; // channel 2 buffer: Falling Step Ramp 
 byte         g_bufferFSRRCh3[c_maxSize]; // channel 3 buffer: Falling Step Ramp Rate
 
 // channel operation mode mask buffer
-byte g_bufferSingleToneMode[c_maxSize * 4];
-byte g_bufferLinearSweepMode[c_maxSize * 4];
+byte g_bufferSingleToneMode[c_maxSize * c_Nch];
+byte g_bufferLinearSweepMode[c_maxSize * c_Nch];
 
 
 
