@@ -85,21 +85,11 @@ const byte c_chSel0 = 0b00010110; // selection bytes
 const byte c_chSel1 = 0b00100110;
 const byte c_chSel2 = 0b01000110;
 const byte c_chSel3 = 0b10000110;
-const byte c_Ch0 = 0;             // custom IDs
-const byte c_Ch1 = 1;
-const byte c_Ch2 = 2;
-const byte c_Ch3 = 3;
-const byte c_Ch0Ch1 = 10;
-const byte c_Ch0Ch2 = 20;
-const byte c_Ch0Ch3 = 30;
-const byte c_Ch1Ch2 = 12;
-const byte c_Ch1Ch3 = 13;
-const byte c_Ch2Ch3 = 23;
-const byte c_Ch1Ch2Ch3 = 123;
-const byte c_Ch0Ch1Ch3 = 130;
-const byte c_Ch0Ch1Ch2 = 210;
-const byte c_Ch0Ch2Ch3 = 230;
-const byte c_ChAll = 4;
+const byte c_Ch0    = 0;          // IDs
+const byte c_Ch1    = 1;
+const byte c_Ch2    = 2;
+const byte c_Ch3    = 3;
+const byte c_ChAll  = 4;
 
 
 // AD9959 register addresses
@@ -137,7 +127,7 @@ volatile unsigned int g_outCh2 = 0;   // channel 2 memory index (out)
 volatile unsigned int g_outCh3 = 0;   // channel 3 memory index (out)
 
 // frequency tuning word buffers
-const unsigned int c_maxSize = 5500;     // max buffer size
+const unsigned int c_maxSize = 5800;     // max buffer size
 unsigned int g_bufferFTW0Ch0[c_maxSize]; // channel 0 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)
 unsigned int g_bufferFTW1Ch0[c_maxSize]; // channel 0 buffer: chirp end frequency tuning word (Linear Sweep Mode only)             
 unsigned int g_bufferFTW0Ch1[c_maxSize]; // channel 1 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)      
@@ -164,9 +154,6 @@ byte         g_bufferFSRRCh0[c_maxSize]; // channel 0 buffer: Falling Step Ramp 
 byte         g_bufferFSRRCh1[c_maxSize]; // channel 1 buffer: Falling Step Ramp Rate
 byte         g_bufferFSRRCh2[c_maxSize]; // channel 2 buffer: Falling Step Ramp Rate
 byte         g_bufferFSRRCh3[c_maxSize]; // channel 3 buffer: Falling Step Ramp Rate
-
-// channel selection mask buffer
-byte g_bufferSelMask[c_maxSize * 4];
 
 // channel operation mode mask buffer
 byte g_bufferSingleToneMode[c_maxSize * 4];
@@ -287,11 +274,8 @@ void decodeInstructionString(){
   cfgHdr = (byte)g_inString.charAt(0);
   g_inString.remove(0, 1);
 
-  // decode channel selection nibble
-  decodeChannelSelectionNibble(cfgHdr);
-
   // decode operation mode nibble
-  decodeChannelModeNibble(cfgHdr);
+  decodeChannelHeader(cfgHdr);
 
   // parse incoming data
   parseInstructionString();
@@ -306,79 +290,14 @@ void decodeInstructionString(){
 
 
 /**
- * Decode channel selection nibble
- * @param[in] cfgHdr configuration char header
- */
-void decodeChannelSelectionNibble(byte cfgHdr){
-
-  // programmed channels selection: first nibble
-  byte chSelByte = (cfgHdr & c_Mask8Nibble04) | 0b00000110;
-
-  // fill channel selection buffer
-  switch (chSelByte){
-    case c_chSel0:
-      g_bufferSelMask[g_numIn] = c_Ch0;
-      break;
-    case c_chSel1:
-      g_bufferSelMask[g_numIn] = c_Ch1;
-      break;
-    case c_chSel2:
-      g_bufferSelMask[g_numIn] = c_Ch2;
-      break;
-    case c_chSel3:
-      g_bufferSelMask[g_numIn] = c_Ch3;
-      break;
-    case c_chSel0 | c_chSel1 | c_chSel2 | c_chSel3:
-      g_bufferSelMask[g_numIn] = c_ChAll;
-      break;
-    case c_chSel0 | c_chSel1:
-      g_bufferSelMask[g_numIn] = c_Ch0Ch1;
-      break;
-    case c_chSel0 | c_chSel2:
-      g_bufferSelMask[g_numIn] = c_Ch0Ch2;
-      break;
-    case c_chSel0 | c_chSel3:
-      g_bufferSelMask[g_numIn] = c_Ch0Ch3;
-      break;
-    case c_chSel1 | c_chSel2:
-      g_bufferSelMask[g_numIn] = c_Ch1Ch2;
-      break;
-    case c_chSel1 | c_chSel3:
-      g_bufferSelMask[g_numIn] = c_Ch1Ch3;
-      break;
-    case c_chSel2 | c_chSel3:
-      g_bufferSelMask[g_numIn] = c_Ch2Ch3;
-      break;
-    case c_chSel1 | c_chSel2 | c_chSel3:
-      g_bufferSelMask[g_numIn] = c_Ch1Ch2Ch3;
-      break;
-    case c_chSel0 | c_chSel1 | c_chSel3:
-      g_bufferSelMask[g_numIn] = c_Ch0Ch1Ch3;
-      break;
-    case c_chSel0 | c_chSel1 | c_chSel2:
-      g_bufferSelMask[g_numIn] = c_Ch0Ch1Ch2;
-      break;
-    case c_chSel0 | c_chSel2 | c_chSel3:
-      g_bufferSelMask[g_numIn] = c_Ch0Ch2Ch3;
-      break;
-    default:
-      // no DAC channel selected
-      g_bufferSelMask[g_numIn] = 0b00000110;
-      break;
-  }
-
-}
-
-
-/**
  * Decode channel operation mode nibble
  * (0: Single-Tone mode; 1: Linear Sweep mode)
  * @param[in] cfgHdr configuration char header
  */
-void decodeChannelModeNibble(byte cfgHdr){
+void decodeChannelHeader(byte cfgHdr){
 
-  // channels operation mode: second nibble
-  byte chLSModByte = ((cfgHdr & c_Mask8Nibble14) << 4) | 0b00000110;
+  // channels operation mode byte
+  byte chLSModByte = ( ((cfgHdr & c_Mask8Nibble14) << 4) & (cfgHdr & c_Mask8Nibble04)) | 0b00000110;
   byte chSTModByte = (~((cfgHdr & c_Mask8Nibble14) << 4) & (cfgHdr & c_Mask8Nibble04)) | 0b00000110;
 
   // fill channel operation mode buffers
@@ -743,18 +662,20 @@ void hardResetDUC(){
 /**
  * Update DDS channel programming: triggered when the c_UpdateInterrupt pin goes from low to high
  */
-void ddsUpdate(){
+void updateDDS(){
 
   // deactivate interrupts
   deactivateISR();
 
-  // activate channel operation modes (updated channels)
+  // activate channel operation modes (updated channels only)
   activateChSTM(g_bufferSingleToneMode[g_numOut]);
   activateChLSM(g_bufferLinearSweepMode[g_numOut]);
 
-  // transfer ST and LS configurations to DUC
-  // code here...
-  // code here...
+  // transfer new configurations to DUC channels
+  updateCh0();
+  updateCh1();
+  updateCh2();
+  updateCh3();
 
   // increase overall output counter
   g_numOut++;
@@ -770,7 +691,7 @@ void ddsUpdate(){
  */
 void activateISR(){
   
-  attachInterrupt(digitalPinToInterrupt(c_UpdateInterrupt), ddsUpdate, RISING);
+  attachInterrupt(digitalPinToInterrupt(c_UpdateInterrupt), updateDDS, RISING);
   attachInterrupt(digitalPinToInterrupt(c_HardResetInterrupt), hardResetDUC, RISING);
   attachInterrupt(digitalPinToInterrupt(c_SoftResetInterrupt), softResetBoard, RISING);
 
@@ -792,6 +713,78 @@ void deactivateISR(){
 
 
 // DDS update functions
+/**
+ * DUC channel 0 update function.
+ */
+void updateCh0(){
+
+  if (isBitSet(g_bufferSingleToneMode[g_numOut], 4)){
+    spiTransferChST(0, g_bufferFTW0Ch0[g_outCh0]);
+    g_outCh0++;
+  }
+  else if(isBitSet(g_bufferLinearSweepMode[g_numOut], 4)){
+    spiTransferChLS(0, g_bufferFTW0Ch0[g_outCh0], g_bufferFTW1Ch0[g_outCh0], g_bufferRDWCh0[g_outCh0],
+                    g_bufferFDWCh0[g_outCh0], g_bufferRSRRCh0[g_outCh0], g_bufferFSRRCh0[g_outCh0]);
+    g_outCh0++;
+  }
+
+}
+
+
+/**
+ * DUC channel 1 update function.
+ */
+void updateCh1(){
+
+  if (isBitSet(g_bufferSingleToneMode[g_numOut], 5)){
+    spiTransferChST(1, g_bufferFTW0Ch1[g_outCh1]);
+    g_outCh1++;
+  }
+  else if(isBitSet(g_bufferLinearSweepMode[g_numOut], 5)){
+    spiTransferChLS(1, g_bufferFTW0Ch1[g_outCh1], g_bufferFTW1Ch1[g_outCh1], g_bufferRDWCh1[g_outCh1],
+                    g_bufferFDWCh1[g_outCh1], g_bufferRSRRCh1[g_outCh1], g_bufferFSRRCh1[g_outCh1]);
+    g_outCh1++;
+  }
+
+}
+
+
+/**
+ * DUC channel 2 update function.
+ */
+void updateCh2(){
+
+  if (isBitSet(g_bufferSingleToneMode[g_numOut], 6)){
+    spiTransferChST(2, g_bufferFTW0Ch2[g_outCh2]);
+    g_outCh2++;
+  }
+  else if(isBitSet(g_bufferLinearSweepMode[g_numOut], 6)){
+    spiTransferChLS(2, g_bufferFTW0Ch2[g_outCh2], g_bufferFTW1Ch2[g_outCh2], g_bufferRDWCh2[g_outCh2],
+                    g_bufferFDWCh2[g_outCh2], g_bufferRSRRCh2[g_outCh2], g_bufferFSRRCh2[g_outCh2]);
+    g_outCh2++;
+  }
+
+}
+
+
+/**
+ * DUC channel 3 update function.
+ */
+void updateCh3(){
+
+  if (isBitSet(g_bufferSingleToneMode[g_numOut], 7)){
+    spiTransferChST(3, g_bufferFTW0Ch3[g_outCh3]);
+    g_outCh3++;
+  }
+  else if(isBitSet(g_bufferLinearSweepMode[g_numOut], 7)){
+    spiTransferChLS(3, g_bufferFTW0Ch3[g_outCh3], g_bufferFTW1Ch3[g_outCh3], g_bufferRDWCh3[g_outCh3],
+                    g_bufferFDWCh3[g_outCh3], g_bufferRSRRCh3[g_outCh3], g_bufferFSRRCh3[g_outCh3]);
+    g_outCh3++;
+  }
+
+}
+
+
 /**
  * (Single Tone Mode) Transfer channel frequency tuning word to AD9959 DDS via quad-SPI
  * @param[in] ch programmed channel(s)
@@ -958,44 +951,14 @@ void selectDDSChannels(byte ch){
     case c_Ch1:
       bufferChSel[1] = c_chSel1;
       break;
-    case 2:
+    case c_Ch2:
       bufferChSel[1] = c_chSel2;
       break;
-    case 3:
+    case c_Ch3:
       bufferChSel[1] = c_chSel3;
       break;
     case c_ChAll:
       bufferChSel[1] = c_chSel0 | c_chSel1 | c_chSel2 | c_chSel3;
-      break;
-    case c_Ch0Ch1:
-      bufferChSel[1] = c_chSel0 | c_chSel1;
-      break;
-    case c_Ch0Ch2:
-      bufferChSel[1] = c_chSel0 | c_chSel2;
-      break;
-    case c_Ch0Ch3:
-      bufferChSel[1] = c_chSel0 | c_chSel3;
-      break;
-    case c_Ch1Ch2:
-      bufferChSel[1] = c_chSel1 | c_chSel2;
-      break;
-    case c_Ch1Ch3:
-      bufferChSel[1] = c_chSel1 | c_chSel3;
-      break;
-    case c_Ch2Ch3:
-      bufferChSel[1] = c_chSel2 | c_chSel3;
-      break;
-    case c_Ch1Ch2Ch3:
-      bufferChSel[1] = c_chSel1 | c_chSel2 | c_chSel3;
-      break;
-    case c_Ch0Ch1Ch3:
-      bufferChSel[1] = c_chSel0 | c_chSel1 | c_chSel3;
-      break;
-    case c_Ch0Ch1Ch2:
-      bufferChSel[1] = c_chSel0 | c_chSel1 | c_chSel2;
-      break;
-    case c_Ch0Ch2Ch3:
-      bufferChSel[1] = c_chSel0 | c_chSel2 | c_chSel3;
       break;
     default:
       bufferChSel[1] = 0b00000110;
