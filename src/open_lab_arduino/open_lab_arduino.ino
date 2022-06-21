@@ -164,10 +164,10 @@ byte g_bufferLinearSweepMode[c_maxSize * 4];
 
 // Board functions
 /**
- * Board setup function (executed once)
+ * MCU board setup function (executed once)
  * . digital pins initialization
  * . frequency tuning word buffers initialization
- * . PC - board serial port initialization
+ * . PC >>> board serial port initialization
  */
 void setup(){
 
@@ -197,7 +197,7 @@ void setup(){
 
 
 /**
- * Board loop function (executed continuously)
+ * MCU board loop function (executed continuously)
  * . listen to USB serial communication
  */
 void loop(){ 
@@ -210,9 +210,9 @@ void loop(){
 
 
 
-// PC - board communication functions
+// PC >>> board communication functions
 /**
- * Listen to the board USB serial port
+ * Listen to the board USB serial port.
  */
 void readSerialPort(){
 
@@ -265,7 +265,7 @@ void readSerialPort(){
 
 
 /**
- * Decode input instruction strings and store data into memory buffers
+ * Decode input instruction strings and store data into memory buffers.
  */
 void decodeInstructionString(){
   
@@ -290,9 +290,10 @@ void decodeInstructionString(){
 
 
 /**
- * Decode channel operation mode nibble
- * (0: Single-Tone mode; 1: Linear Sweep mode)
- * @param[in] cfgHdr configuration char header
+ * Decode channel activation byte header.
+ * MSN: updated channels (0: do not update; 1: update);
+ * LSN: channels operation mode (0: Single-Tone mode; 1: Linear Sweep mode).
+ * @param[in] cfgHdr DUC channels configuration header
  */
 void decodeChannelHeader(byte cfgHdr){
 
@@ -308,7 +309,7 @@ void decodeChannelHeader(byte cfgHdr){
 
 
 /**
- * Parse comma-separated instruction string
+ * Parse comma-separated instruction string.
  * 
  */
 void parseInstructionString(){
@@ -327,11 +328,11 @@ while (sep_idx != -1){
 
 /**
  * Encode DUC tuning words and store them into memory buffers.
- * 
+ * @param[in] cfgHdr DUC channels configuration header
  */
 void storeParsedValues(byte cfgHdr){
 
-  // declare DUC tuning words
+  // DUC tuning words
   unsigned int FTW0;
   unsigned int FTW1;
   unsigned int RDW;
@@ -341,13 +342,13 @@ void storeParsedValues(byte cfgHdr){
 
   // backward loop over channels (from 3 to 0)
   byte offset = 0;
-  for (byte i = c_Nch - 1; i >= 1; i--){
+  for (byte ch = c_Nch - 1; ch >= 1; ch--){
 
     // check channel selection bit in cfgHdr
-    if (isBitSet(cfgHdr, i + c_Nch)){
+    if (isBitSet(cfgHdr, ch + c_Nch)){
 
       // check channel mode bit in cfgHdr (0: STM; 1: LSM)
-      if (isBitSet(cfgHdr, i)){
+      if (isBitSet(cfgHdr, ch)){
 
         // linear sweep mode: 6 values
         float freqStart = g_parsedValues[offset];
@@ -375,7 +376,7 @@ void storeParsedValues(byte cfgHdr){
         offset = offset + 6;
 
         // fill memory
-        storeLinearSweep(i, FTW0, FTW1, RDW, FDW, RSRR, FSRR);
+        storeLinearSweep(ch, FTW0, FTW1, RDW, FDW, RSRR, FSRR);
 
       }
       else{
@@ -385,7 +386,7 @@ void storeParsedValues(byte cfgHdr){
         offset++;
 
         // fill memory
-        storeSingleTone(i, FTW0);
+        storeSingleTone(ch, FTW0);
 
       }
 
@@ -398,7 +399,8 @@ void storeParsedValues(byte cfgHdr){
 
 /**
  * Store single-tone frequency tuning word in the respective channel buffer.
- * 
+ * @param[in] ch  DUC channel
+ * @param[in] FTW single-tone frequency tuning word
  */
 void storeSingleTone(byte ch, unsigned int FTW){
 
@@ -426,6 +428,13 @@ void storeSingleTone(byte ch, unsigned int FTW){
 
 /**
  * Store linear sweep tuning words in the respective channel buffers.
+ * @param[in] ch   DUC channel
+ * @param[in] FTW0 chirp start frequency tuning word
+ * @param[in] FTW1 chirp end frequency tuning word
+ * @param[in] RDW  rising frequency delta word
+ * @param[in] FDW  falling frequency delta word
+ * @param[in] RSRR rising step ramp rate
+ * @param[in] FSRR falling step ramp rate
  * 
  */
 void storeLinearSweep(byte ch, unsigned int FTW0, unsigned int FTW1,
@@ -478,8 +487,8 @@ void storeLinearSweep(byte ch, unsigned int FTW0, unsigned int FTW1,
 // DUC initialization functions
 /**
  * AD9959 initialization function
+ * . PLL initialization (FR1 register)
  * . quad-SPI initialization
- * . FR1 initialization (REF_CLK multiplier)
  */
 void initDUC(){
 
@@ -531,7 +540,7 @@ void setPLLDivider(){
 
 // Board initialization functions
 /**
- * Initialize digital pins logic state
+ * Initialize digital pins logic state.
  */
 void initDigitalPins(){ 
 
@@ -560,7 +569,7 @@ void initDigitalPins(){
 
 
 /**
- * Initialize Frequency Tuning Word buffers (to 0)
+ * Initialize DUC tuning word buffers (to 0).
  */
 void initFTWBuffers(){
 
@@ -599,7 +608,7 @@ void initFTWBuffers(){
 
 // Interrupt service routines
 /**
- * Board re-initialization: triggered when the c_SoftResetInterrupt pin goes from low to high
+ * MCU board re-initialization ("soft" reset): triggered when the c_SoftResetInterrupt pin goes from low to high.
  */
 void softResetBoard(){
   
@@ -635,7 +644,7 @@ void softResetBoard(){
 
 
 /**
- * Issue a master reset signal (DUC "hard" reset): triggered when the c_HardResetInterrupt pin goes from low to high
+ * DUC reset via master reset signal ("hard" reset): triggered when the c_HardResetInterrupt pin goes from low to high.
  */
 void hardResetDUC(){
 
@@ -660,9 +669,9 @@ void hardResetDUC(){
 
 
 /**
- * Update DDS channel programming: triggered when the c_UpdateInterrupt pin goes from low to high
+ * Update DUC channels programming: triggered when the c_UpdateInterrupt pin goes from low to high.
  */
-void updateDDS(){
+void updateDUC(){
 
   // deactivate interrupts
   deactivateISR();
@@ -687,11 +696,11 @@ void updateDDS(){
 
 
 /**
- * Activate interrupt service routines
+ * Activate external interrupt service routines.
  */
 void activateISR(){
   
-  attachInterrupt(digitalPinToInterrupt(c_UpdateInterrupt), updateDDS, RISING);
+  attachInterrupt(digitalPinToInterrupt(c_UpdateInterrupt), updateDUC, RISING);
   attachInterrupt(digitalPinToInterrupt(c_HardResetInterrupt), hardResetDUC, RISING);
   attachInterrupt(digitalPinToInterrupt(c_SoftResetInterrupt), softResetBoard, RISING);
 
@@ -699,7 +708,7 @@ void activateISR(){
 
 
 /**
- * De-activate interrupt service routines
+ * De-activate external interrupt service routines.
  */
 void deactivateISR(){
 
@@ -786,8 +795,8 @@ void updateCh3(){
 
 
 /**
- * (Single Tone Mode) Transfer channel frequency tuning word to AD9959 DDS via quad-SPI
- * @param[in] ch programmed channel(s)
+ * (Single Tone Mode) Transfer channel frequency tuning word to AD9959 DDS via quad-SPI.
+ * @param[in] ch  programmed channel(s)
  * @param[in] FTW frequency tuning word
  */
 void spiTransferChST(byte ch, unsigned int FTW){
@@ -813,12 +822,12 @@ void spiTransferChST(byte ch, unsigned int FTW){
 
 
 /**
- * (Linear Sweep Mode) Transfer chirp words to AD9959 DDS via quad-SPI
- * @param[in] ch programmed channel(s)
+ * (Linear Sweep Mode) Transfer chirp words to AD9959 DDS via quad-SPI.
+ * @param[in] ch   programmed channel(s)
  * @param[in] FTW0 start frequency tuning word
  * @param[in] FTW1 end frequency tuning word
- * @param[in] RDW rising delta frequency word
- * @param[in] FDW falling delta frequency word
+ * @param[in] RDW  rising delta frequency word
+ * @param[in] FDW  falling delta frequency word
  * @param[in] RSRR rising sweep ramp rate
  * @param[in] FSRR falling sweep ramp rate
  */
@@ -877,8 +886,7 @@ void spiTransferChLS(byte ch, unsigned int FTW0, unsigned int FTW1,
 
 // DUC configuration functions
 /**
- * Activate the Single-Tone operation mode of the AD9959 DDS
- * on desired input channels.
+ * Activate the Single-Tone operation mode of the AD9959 DDS on desired input channels.
  * @param[in] chSelMask DUC channel selection mask
  */
 void activateChSTM(byte chSelMask){
@@ -904,8 +912,7 @@ void activateChSTM(byte chSelMask){
 
 
 /**
- * Activate the Linear Sweep operation mode of the AD9959 DDS
- * on desired input channels.
+ * Activate the Linear Sweep operation mode of the AD9959 DDS on desired input channels.
  * @param[in] chSelMask DUC channel selection mask
  */
 void activateChLSM(byte chSelMask){
@@ -937,7 +944,8 @@ void activateChLSM(byte chSelMask){
 
 
 /**
- * Select AD9959 DDS channels
+ * Select AD9959 DDS channels.
+ * @param[in] ch channel(s) to be selected
  */
 void selectDDSChannels(byte ch){
 
@@ -978,7 +986,7 @@ void selectDDSChannels(byte ch){
 
 // Custom quad-SPI functions
 /**
- * Initialize quad-SPI
+ * Initialize quad-SPI communication.
  */
 void initQuadSPI(){ 
 
@@ -1012,8 +1020,7 @@ void initQuadSPI(){
 
 
 /**
- * Custom SPI 8-bit data transfer (with serial clock divider)
- * 
+ * Custom SPI 8-bit data transfer (with serial clock divider).
  * @param[in] data input byte to be transferred
  */
 void singleSPIByteTransfer(byte data){
@@ -1037,8 +1044,7 @@ void singleSPIByteTransfer(byte data){
 
 
 /**
- * Custom quad-SPI 8-bit data transfer (with serial clock divider)
- * 
+ * Custom quad-SPI 8-bit data transfer (with serial clock divider).
  * @param[in] data input byte to be transferred
  */
 void quadSPIByteTransfer(byte data){
@@ -1050,8 +1056,7 @@ void quadSPIByteTransfer(byte data){
 
 
 /**
- * Custom SPI buffer transfer (with serial clock divider)
- * 
+ * Custom SPI buffer transfer (with serial clock divider).
  * @param[in] buffer input buffer to be transferred
  * @param[in] buffer_size buffer size in bytes
  */
@@ -1063,8 +1068,7 @@ void singleSPIBufferTransfer(byte buffer[], unsigned int buffer_size){
 
 
 /**
- * Custom quad-SPI buffer transfer (with serial clock divider)
- * 
+ * Custom quad-SPI buffer transfer (with serial clock divider).
  * @param[in] buffer input buffer to be transferred
  * @param[in] buffer_size buffer size in bytes
  */
@@ -1079,16 +1083,14 @@ void quadSPIBufferTransfer(byte buffer[], unsigned int buffer_size){
 
 // Utilities
 /**
- * Encode DDS Frequency Tuning Word
- * 
- * @param[in] f_AOD AOD frequency in MHz
- * 
+ * Encode DDS Frequency Tuning Word.
+ * @param[in] freq frequency in MHz
  * @returns 32-bit Frequency Tuning Word
  */
-unsigned int encodeFTW(float f_AOD){
+unsigned int encodeFTW(float freq){
 
   unsigned int FTW;
-  FTW = (unsigned int)round(pow(2, c_DDSbits) * f_AOD / c_SysClk);
+  FTW = (unsigned int)round(pow(2, c_DDSbits) * freq / c_SysClk);
 
   return FTW;
 
@@ -1096,27 +1098,24 @@ unsigned int encodeFTW(float f_AOD){
 
 
 /**
- * Decode DDS Frequency Tuning Word
- * 
+ * Decode DDS Frequency Tuning Word.
  * @param[in] FTW 32-bit Frequency Tuning Word
- * 
- * @returns AOD frequency in MHz
+ * @returns frequency in MHz
  */
 float decodeFrequency(unsigned int FTW){
 
-  float f_AOD;
-  f_AOD = (float)(FTW * c_SysClk / pow(2, c_DDSbits));
+  float freq;
+  freq = (float)(FTW * c_SysClk / pow(2, c_DDSbits));
 
-  return f_AOD;
+  return freq;
 
 }
 
 
 /**
- * Issue an I/O update pulse via MCU board
- * 
- * note: the I/O update pulse is oversampled by the SYNC_CLK,
- * therefore its width must be greater than one SYNC_CLK period, i.e. 8 ns
+ * Issue an I/O update pulse via MCU board.
+ * NOTE: I/O update pulses are oversampled by the SYNC_CLK,
+ * therefore their width must be greater than one SYNC_CLK period, i.e. 8 ns.
  */
 void ioUpdate(){
 
@@ -1128,11 +1127,9 @@ void ioUpdate(){
 
 
 /**
- * Check if k-th bit in byte n is set.
- * 
+ * Check if k-th bit in byte b is set.
  * @param[in] b input byte to check
  * @param[in] p checked position
- * 
  * @returns true if p-th bit is set, false otherwise
  */
 bool isBitSet(byte b, byte p){
@@ -1148,7 +1145,7 @@ bool isBitSet(byte b, byte p){
 
 // Print functions
 /**
- * Print instruction string communication summary
+ * Print instruction string communication summary.
  */
 void printSerialCOM(){
 
@@ -1172,7 +1169,7 @@ void printSerialCOM(){
 
 
 /**
- * Print complete byte to serial monitor
+ * Print complete byte to serial monitor.
  */
 void printByte(byte B){
   for(int i = 7; i >= 0; i--){
@@ -1184,7 +1181,7 @@ void printByte(byte B){
 
 
 /**
- * Print complete 32-bit uint word to serial monitor
+ * Print complete 32-bit uint word to serial monitor.
  */
 void printUint(unsigned int UI){
   for(int i = 31; i >= 0; i--){
