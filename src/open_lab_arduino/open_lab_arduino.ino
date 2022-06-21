@@ -269,22 +269,28 @@ void readSerialPort(){
  */
 void decodeInstructionString(){
   
-  // decode configuration header
-  byte cfgHdr;
-  cfgHdr = (byte)g_inString.charAt(0);
-  g_inString.remove(0, 1);
+  // available memory
+  if (g_numIn < c_maxSize){
 
-  // decode operation mode nibble
-  decodeChannelHeader(cfgHdr);
+    // decode configuration header
+    byte cfgHdr;
+    cfgHdr = (byte)g_inString.charAt(0);
+    g_inString.remove(0, 1);
 
-  // parse incoming data
-  parseInstructionString();
+    // decode operation mode nibble
+    decodeChannelHeader(cfgHdr);
 
-  // encode and store parsed data
-  storeParsedValues(cfgHdr);
+    // parse incoming data
+    parseInstructionString();
 
-  // increase overall input counter
-  g_numIn++;
+    // encode and store parsed data
+    storeParsedValues(cfgHdr);
+
+    // increase overall input counter
+    g_numIn++;
+  }
+  // max memory reached
+  else Serial.println("\n* Max memory reached! Ignoring input instruction strings...")
 
 }
 
@@ -623,16 +629,8 @@ void softResetBoard(){
   g_byteCount = 0;
     
   // reset indices
-  g_numIn  = 0;   // input
-  g_inCh0  = 0;
-  g_inCh1  = 0;
-  g_inCh2  = 0;
-  g_inCh3  = 0;
-  g_numOut = 0;   // output
-  g_outCh0 = 0;
-  g_outCh1 = 0;
-  g_outCh2 = 0;
-  g_outCh3 = 0;
+  resetInputIndices();
+  resetOutputIndices();
 
   // reset FTW buffers
   initFTWBuffers();
@@ -675,6 +673,9 @@ void updateDUC(){
 
   // deactivate interrupts
   deactivateISR();
+
+  // re-initialize memory indices
+  if (g_numOut > g_numIn) resetOutputIndices();
 
   // activate channel operation modes (updated channels only)
   activateChSTM(g_bufferSingleToneMode[g_numOut]);
@@ -1140,6 +1141,29 @@ bool isBitSet(byte b, byte p){
 
 }
 
+
+/**
+ * Reset input memory indices.
+ */
+void resetInputIndices(){
+  g_numIn = 0;
+  g_inCh0 = 0;
+  g_inCh1 = 0;
+  g_inCh2 = 0;
+  g_inCh3 = 0;
+}
+
+
+/**
+ * Reset output memory indices.
+ */
+void resetOutputIndices(){
+  g_numOut = 0;
+  g_outCh0 = 0;
+  g_outCh1 = 0;
+  g_outCh2 = 0;
+  g_outCh3 = 0;
+}
 
 
 
