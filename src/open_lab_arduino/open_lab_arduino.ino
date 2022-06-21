@@ -127,13 +127,7 @@ unsigned int g_inCh0 = 0;     // channel 0 memory index (in)
 unsigned int g_inCh1 = 0;     // channel 1 memory index (in)
 unsigned int g_inCh2 = 0;     // channel 2 memory index (in)
 unsigned int g_inCh3 = 0;     // channel 3 memory index (in)
-float g_fIn[c_Nch];           // [MHz]    buffer for input AOD frequency             (Single Tone Mode)
-float g_fStartIn[c_Nch];      // [MHz]    buffer for input AOD chirp start frequency (Linear Sweep Mode)
-float g_fEndIn[c_Nch];        // [MHz]    buffer for input AOD chirp end frequency   (Linear Sweep Mode)
-float g_dTchirp;              // [μs]     chirp time step
-float g_dFchirp;              // [MHz]    chirp frequency step
-float g_dTtrans;              // [μs]     transient time step
-float g_dFtrans;              // [MHz]    transient frequency step
+
 
 // output from MCU board
 volatile unsigned int g_numOut = 0;   // overall output setting counter
@@ -283,207 +277,6 @@ void readSerialPort(){
 
 
 /**
- * Decode and store Single Tone mode frequency values
- */
-/* void decodeSingleTone(){
-  
-  // get DDS channel header
-  int ch = (g_inString.substring(0, 1)).toInt(); 
-  g_inString.remove(0, 1);
-
-  // X1 AOD
-  if (ch == c_X1ch){                   
-    g_fIn[c_X1ch] = g_inString.toFloat();  // [MHz]
-    g_BufferFTW0Ch0[g_inCh0] = encodeFTW(g_fIn[c_X1ch]);
-    g_inCh0++;
-  }
-  // Y1 AOD
-  else if (ch == c_Y1ch){              
-    g_fIn[c_Y1ch] = g_inString.toFloat();  // [MHz]
-    g_BufferFTW0Ch1[g_inCh1] = encodeFTW(g_fIn[c_Y1ch]);
-    g_inCh1++;
-  }
-  // X2 AOD
-  else if (ch == c_X2ch){              
-    g_fIn[c_X2ch] = g_inString.toFloat();  // [MHz]
-    g_BufferFTW0Ch2[g_inCh2] = encodeFTW(g_fIn[c_X2ch]);
-    g_inCh2++;
-  }
-  // Y2 AOD
-  else if (ch == c_Y2ch){  
-    g_fIn[c_Y2ch] = g_inString.toFloat();  // [MHz]
-    g_BufferFTW0Ch3[g_inCh3] = encodeFTW(g_fIn[c_Y2ch]);
-    g_inCh3++;
-  }
-
-} */
-
-
-/**
- * Decode and store Linear Sweep mode frequency values
- */
-/* void decodeLinearSweep(){
-  
-  // decode chirp limit frequency values
-  if (!g_hdrString.equals("RTS") && !g_hdrString.equals("RFS") && !g_hdrString.equals("TFS") && !g_hdrString.equals("TTS")){
-    
-    // get DDS channel header
-    int ch = (g_inString.substring(0,1)).toInt();
-    g_inString.remove(0, 1);
-
-    // get start/end frequencies
-    byte strParts = 2;
-    for (byte i = 0; i < strParts; i++){
-
-      String part = getValue(g_inString, ';', i);
-
-      if (part.charAt(0) == 's'){
-        part.remove(0, 1);
-        g_fStartIn[ch] = part.toFloat();   // [MHz]
-      }
-      else if (part.charAt(0) == 'e'){
-        part.remove(0, 1);
-        g_fEndIn[ch] = part.toFloat();     // [MHz]
-      }
-
-    }
-
-    // X1 AOD
-    if (ch == c_X1ch){
-      g_upSweepStage1 = g_fStartIn[c_X1ch] <= g_fEndIn[c_X1ch];
-
-      // upsweep
-      if (g_upSweepStage1){
-        g_BufferFTW0Ch0[g_inCh0] = encodeFTW(g_fStartIn[c_X1ch]);
-        g_BufferFTW1Ch0[g_inCh0] = encodeFTW(g_fEndIn[c_X1ch]);
-      }
-      // downsweep
-      else{
-        g_BufferFTW0Ch0[g_inCh0] = encodeFTW(g_fEndIn[c_X1ch]);
-        g_BufferFTW1Ch0[g_inCh0] = encodeFTW(g_fStartIn[c_X1ch]);
-      }
-      g_inCh0++;
-
-    }
-    // Y1 AOD
-    else if (ch == c_Y1ch){
-      g_upSweepStage1 = g_fStartIn[c_Y1ch] <= g_fEndIn[c_Y1ch];
-
-      // upsweep
-      if (g_upSweepStage1){
-        g_BufferFTW0Ch1[g_inCh1] = encodeFTW(g_fStartIn[c_Y1ch]);
-        g_BufferFTW1Ch1[g_inCh1] = encodeFTW(g_fEndIn[c_Y1ch]);
-      }
-      // downsweep
-      else{
-        g_BufferFTW0Ch1[g_inCh1] = encodeFTW(g_fEndIn[c_Y1ch]);
-        g_BufferFTW1Ch1[g_inCh1] = encodeFTW(g_fStartIn[c_Y1ch]);
-      }
-      g_inCh1++;
-    }
-    // X2 AOD
-    else if (ch == c_X2ch){
-      g_upSweepStage2 = g_fStartIn[c_X2ch] <= g_fEndIn[c_X2ch];
-
-      // upsweep
-      if (g_upSweepStage2){
-        g_BufferFTW0Ch2[g_inCh2] = encodeFTW(g_fStartIn[c_X2ch]);
-        g_BufferFTW1Ch2[g_inCh2] = encodeFTW(g_fEndIn[c_X2ch]);
-      }
-      // downsweep
-      else{
-        g_BufferFTW0Ch2[g_inCh2] = encodeFTW(g_fEndIn[c_X2ch]);
-        g_BufferFTW1Ch2[g_inCh2] = encodeFTW(g_fStartIn[c_X2ch]);
-      }
-      g_inCh2++;
-    }
-    // Y2 AOD
-    else if (ch == c_Y2ch){
-      g_upSweepStage2 = g_fStartIn[c_Y2ch] <= g_fEndIn[c_Y2ch];
-
-      // upsweep
-      if (g_upSweepStage2){
-        g_BufferFTW0Ch3[g_inCh3] = encodeFTW(g_fStartIn[c_Y2ch]);
-        g_BufferFTW1Ch3[g_inCh3] = encodeFTW(g_fEndIn[c_Y2ch]);
-      }
-      // downsweep
-      else{
-        g_BufferFTW0Ch3[g_inCh3] = encodeFTW(g_fEndIn[c_Y2ch]);
-        g_BufferFTW1Ch3[g_inCh3] = encodeFTW(g_fStartIn[c_Y2ch]);          
-      }
-      g_inCh3++;
-    }
-
-  } 
-  // chirp time step
-  else if (g_hdrString.equals("RTS")){
-    g_inRTS++;
-    g_inString.remove(0,3);
-    g_dTchirp = g_inString.toFloat(); // [μs]
-
-    // fill buffers according to the frequency sweep direction
-    if(g_upSweepStage1) g_BufferRSRR[g_inZ] = (byte)(g_dTchirp * c_SyncClk);
-    else g_BufferFSRR[g_inZ] = (byte)(g_dTchirp * c_SyncClk);
-    
-  }
-  // chirp transient time step
-  else if (g_hdrString.equals("TTS")){
-    g_inTTS++;
-    g_inString.remove(0,3);
-    g_dTtrans = g_inString.toFloat(); // [μs]
-      
-    // fill buffers according to the frequency sweep direction
-    if(g_upSweepStage1) g_BufferFSRR[g_inZ] = (byte)(g_dTtrans * c_SyncClk);
-    else g_BufferRSRR[g_inZ] = (byte)(g_dTtrans * c_SyncClk);
-    
-  }
-  // chirp frequency step
-  else if (g_hdrString.equals("RFS")){
-    g_inRFS++;
-    g_inString.remove(0,3);
-    g_dFchirp = g_inString.toFloat(); // [MHz]
-      
-    // fill buffers according to the frequency sweep direction
-    if(g_upSweepStage1) g_BufferRDWCh0[g_inZ] = encodeFTW(g_dFchirp);
-    else g_BufferFDWCh0[g_inZ] = encodeFTW(g_dFchirp);
-    
-  }
-  // chirp transient frequency step
-  else if (g_hdrString.equals("TFS")){
-    g_inTFS++;
-    g_inString.remove(0,3);
-    g_dFtrans = g_inString.toFloat(); // [MHz]    
-      
-    // fill buffers according to the frequency sweep direction
-    if(g_upSweepStage1) g_BufferFDWCh0[g_inZ] = encodeFTW(g_dFtrans);
-    else g_BufferRDWCh0[g_inZ] = encodeFTW(g_dFtrans);
-   
-    // increase chirp step index (once)
-    g_inZ++;   
-   
-  }
-
-}
-String getValue(const String &data, char separator, int index){
-
-  byte found = 0;
-  byte strIndex[] = {0, -1};
-  byte maxIndex = data.length() - 1;
-
-  for (byte i = 0; i <= maxIndex && found <= index; i++) {
-    if (data.charAt(i) == separator || i == maxIndex) {
-      found++;
-      strIndex[0] = strIndex[1] + 1;
-      strIndex[1] = (i == maxIndex) ? i + 1 : i;
-    }
-  }
-
-  return found > index ? data.substring(strIndex[0], strIndex[1]) : "";
-
-} */
-
-
-/**
  * Decode input instruction strings and store data into memory buffers
  */
 void decodeInstructionString(){
@@ -502,19 +295,11 @@ void decodeInstructionString(){
   // parse incoming data
   parseInstructionString();
 
-  // backward loop over channels (from 3 to 0)
-  byte offset = 0;
-  for (byte i = c_Nch - 1; i >= 0; i--){
+  // encode and store parsed data
+  storeParsedValues(cfgHdr);
 
-    // 1. check channel selection bit in cfgHdr
-
-    // 2. if channel is selected, check channel mode bit in cfgHdr
-
-    // 3a. if 1 (LSM), consider 6 values starting from offset
-
-    // 3b. if 0 (STM), consider 1 value starting from offset
-
-  }
+  // increase overall input counter
+  g_numIn++;
 
 }
 
@@ -616,6 +401,156 @@ while (sep_idx != -1){
 }
 
 }
+
+
+/**
+ * Encode DUC tuning words and store them into memory buffers.
+ * 
+ */
+void storeParsedValues(byte cfgHdr){
+
+  // declare DUC tuning words
+  unsigned int FTW0;
+  unsigned int FTW1;
+  unsigned int RDW;
+  unsigned int FDW;
+  byte RSRR;
+  byte FSRR;
+
+  // backward loop over channels (from 3 to 0)
+  byte offset = 0;
+  for (byte i = c_Nch - 1; i >= 1; i--){
+
+    // check channel selection bit in cfgHdr
+    if (isBitSet(cfgHdr, i + c_Nch)){
+
+      // check channel mode bit in cfgHdr (0: STM; 1: LSM)
+      if (isBitSet(cfgHdr, i)){
+
+        // linear sweep mode: 6 values
+        float freqStart = g_parsedValues[offset];
+        float freqEnd   = g_parsedValues[offset + 1];
+
+        // check sweeping direction
+        // up
+        if (freqStart <= freqEnd){
+          FTW0 = encodeFTW(freqStart);
+          FTW1 = encodeFTW(freqEnd);
+          RDW  = encodeFTW(g_parsedValues[offset + 2]);
+          FDW  = encodeFTW(g_parsedValues[offset + 3]);
+          RSRR = (byte)(g_parsedValues[offset + 4] * c_SyncClk);
+          FSRR = (byte)(g_parsedValues[offset + 5] * c_SyncClk);
+        }
+        // down
+        else{
+          FTW0 = encodeFTW(freqEnd);
+          FTW1 = encodeFTW(freqStart);
+          RDW  = encodeFTW(g_parsedValues[offset + 3]);
+          FDW  = encodeFTW(g_parsedValues[offset + 2]);
+          RSRR = (byte)(g_parsedValues[offset + 5] * c_SyncClk);
+          FSRR = (byte)(g_parsedValues[offset + 4] * c_SyncClk);
+        }
+        offset = offset + 6;
+
+        // fill memory
+        storeLinearSweep(i, FTW0, FTW1, RDW, FDW, RSRR, FSRR);
+
+      }
+      else{
+        
+        // single-tone mode: 1 value
+        FTW0 = encodeFTW(g_parsedValues[offset]);
+        offset++;
+
+        // fill memory
+        storeSingleTone(i, FTW0);
+
+      }
+
+    }
+
+  }
+
+}
+
+
+/**
+ * Store single-tone frequency tuning word in the respective channel buffer.
+ * 
+ */
+void storeSingleTone(byte ch, unsigned int FTW){
+
+  switch (ch){
+    case c_Ch0:
+      g_bufferFTW0Ch0[g_inCh0] = FTW;
+      g_inCh0++;
+      break;
+    case c_Ch1:
+      g_bufferFTW0Ch1[g_inCh1] = FTW;
+      g_inCh1++;
+      break;
+    case c_Ch2:
+      g_bufferFTW0Ch2[g_inCh2] = FTW;
+      g_inCh2++;
+      break;
+    case c_Ch3:
+      g_bufferFTW0Ch3[g_inCh3] = FTW;
+      g_inCh3++;
+      break;
+  }
+
+}
+
+
+/**
+ * Store linear sweep tuning words in the respective channel buffers.
+ * 
+ */
+void storeLinearSweep(byte ch, unsigned int FTW0, unsigned int FTW1,
+                      unsigned int RDW, unsigned int FDW, byte RSRR, byte FSRR){
+
+  switch (ch){
+    case c_Ch0:
+      g_bufferFTW0Ch0[g_inCh0] = FTW0;
+      g_bufferFTW1Ch0[g_inCh0] = FTW1;
+      g_bufferRDWCh0[g_inCh0]  = RDW;
+      g_bufferFDWCh0[g_inCh0]  = FDW;
+      g_bufferRSRRCh0[g_inCh0] = RSRR;
+      g_bufferFSRRCh0[g_inCh0] = FSRR;
+      g_inCh0++;
+      break;
+    case c_Ch1:
+      g_bufferFTW0Ch1[g_inCh1] = FTW0;
+      g_bufferFTW1Ch1[g_inCh1] = FTW1;
+      g_bufferRDWCh1[g_inCh1]  = RDW;
+      g_bufferFDWCh1[g_inCh1]  = FDW;
+      g_bufferRSRRCh1[g_inCh1] = RSRR;
+      g_bufferFSRRCh1[g_inCh1] = FSRR;
+      g_inCh1++;
+      break;
+    case c_Ch2:
+      g_bufferFTW0Ch2[g_inCh2] = FTW0;
+      g_bufferFTW1Ch2[g_inCh2] = FTW1;
+      g_bufferRDWCh2[g_inCh2]  = RDW;
+      g_bufferFDWCh2[g_inCh2]  = FDW;
+      g_bufferRSRRCh2[g_inCh2] = RSRR;
+      g_bufferFSRRCh2[g_inCh2] = FSRR;
+      g_inCh2++;
+      break;
+    case c_Ch3:
+      g_bufferFTW0Ch3[g_inCh3] = FTW0;
+      g_bufferFTW1Ch3[g_inCh3] = FTW1;
+      g_bufferRDWCh3[g_inCh3]  = RDW;
+      g_bufferFDWCh3[g_inCh3]  = FDW;
+      g_bufferRSRRCh3[g_inCh3] = RSRR;
+      g_bufferFSRRCh3[g_inCh3] = FSRR;
+      g_inCh3++;
+      break;
+  }
+
+}
+
+
 
 
 // DUC initialization functions
@@ -757,7 +692,8 @@ void softResetBoard(){
   g_byteCount = 0;
     
   // reset indices
-  g_inCh0  = 0;   // input
+  g_numIn  = 0;   // input
+  g_inCh0  = 0;
   g_inCh1  = 0;
   g_inCh2  = 0;
   g_inCh3  = 0;
