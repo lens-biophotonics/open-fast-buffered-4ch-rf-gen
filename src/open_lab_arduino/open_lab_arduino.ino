@@ -33,14 +33,16 @@ const byte c_PwnDwn    = 2;             // output to DUC   /  DUC power-down con
 const byte c_HardReset = 3;             // output to DUC   /  DUC master reset
 const byte c_IOUpdate  = 5;             // output to DUC   /  data I/O update 
 const byte c_ChipSel   = 10;            // output to DUC   /  DUC chip select
-const byte c_HardResetInterrupt = 28;   // input           /  trigger DUC hard reset routine
+const byte c_HardResetInterrupt = 29;   // input           /  trigger DUC hard reset routine
 const byte c_SoftResetInterrupt = 30;   // input           /  trigger MCU soft reset routine
+const byte c_SPIModeInterrupt   = 31;   // input           /  trigger single/quad-SPI activation routines
 const byte c_UpdateInterrupt    = 32;   // input           /  trigger DUC update routine
 
 // quad-SPI (data pins ordered from msb to lsb, + SCLK)
-const byte c_quadSPIPins[5] = {15, 14, 18, 19, 40};
+const byte c_QuadSPIPins[5] = {15, 14, 18, 19, 40};
 const byte c_QuadSclk = 40;
 const byte c_QuadSclkDiv = 2;
+bool g_QuadSPIActive = false;
 
 // safe-clear mask for GPIO6_DR port pins
 // 1111 1111 1110 0000 1111 1111 1111 1111                                           
@@ -81,10 +83,10 @@ const byte c_DDSbits = 32;
 
 // AD9959 DAC channels
 const byte c_Nch = 4;
-const byte c_chSel0 = 0b00010110; // selection bytes
-const byte c_chSel1 = 0b00100110;
-const byte c_chSel2 = 0b01000110;
-const byte c_chSel3 = 0b10000110;
+const byte c_chSel0 = 0b00010000; // selection bytes
+const byte c_chSel1 = 0b00100000;
+const byte c_chSel2 = 0b01000000;
+const byte c_chSel3 = 0b10000000;
 const byte c_Ch0    = 0;          // IDs
 const byte c_Ch1    = 1;
 const byte c_Ch2    = 2;
@@ -290,7 +292,7 @@ void decodeInstructionString(){
     g_numIn++;
   }
   // max memory reached
-  else Serial.println("\n* Max memory reached! Ignoring input instruction strings...")
+  else Serial.println("\n* Max memory reached! Ignoring input instruction strings...");
 
 }
 
@@ -304,8 +306,8 @@ void decodeInstructionString(){
 void decodeChannelHeader(byte cfgHdr){
 
   // channels operation mode byte
-  byte chLSModByte = ( ((cfgHdr & c_Mask8Nibble14) << 4) & (cfgHdr & c_Mask8Nibble04)) | 0b00000110;
-  byte chSTModByte = (~((cfgHdr & c_Mask8Nibble14) << 4) & (cfgHdr & c_Mask8Nibble04)) | 0b00000110;
+  byte chLSModByte = ( ((cfgHdr & c_Mask8Nibble14) << 4) & (cfgHdr & c_Mask8Nibble04));
+  byte chSTModByte = (~((cfgHdr & c_Mask8Nibble14) << 4) & (cfgHdr & c_Mask8Nibble04));
 
   // fill channel operation mode buffers
   g_bufferSingleToneMode[g_numIn]  = chSTModByte;
@@ -566,6 +568,12 @@ void initDigitalPins(){
   pinMode(c_ChipSel, OUTPUT);
   digitalWriteFast(c_ChipSel, LOW);
 
+  // set SPI communication pins
+  for (byte i = 0; i < 5; i++){
+    pinMode(c_QuadSPIPins[i], OUTPUT);
+    digitalWriteFast(c_QuadSPIPins[i], LOW);
+  }
+
   // set DUC update interrupt pins as input
   pinMode(c_UpdateInterrupt, INPUT_PULLUP);
   pinMode(c_SoftResetInterrupt, INPUT_PULLUP);
@@ -697,6 +705,86 @@ void updateDUC(){
 
 
 /**
+ * Initialize quad-SPI communication.
+ */
+void initQuadSPI(){ 
+
+  // deactivate interrupts
+  deactivateISR();
+
+  // select DUC
+  digitalWriteFast(c_ChipSel, HIGH);
+
+  // transfer 00000000 00000110 via "custom" single-bit SPI
+  byte bufferInitSPI[2];
+  bufferInitSPI[0] = c_CSR;
+  bufferInitSPI[1] = 0b11110110;
+  
+  // select slave device
+  digitalWriteFast(c_ChipSel, LOW);
+
+  // send data via single-SPI
+  singleSPIBufferTransfer(bufferInitSPI, 2);
+
+  // de-select DUC
+  digitalWriteFast(c_ChipSel, HIGH);
+
+  // issue an I/O update for changing the serial mode bits
+  ioUpdate();
+
+  // quad-SPI is active
+  g_QuadSPIActive = true;
+
+  // print to serial monitor
+  Serial.println("\n* MCU>>>DUC quad-SPI communication activated!\n");
+
+  // activate interrupts
+  activateISR();
+
+}
+
+
+/**
+ * Initialize single-SPI communication.
+ */
+void initSingleSPI(){ 
+
+  // deactivate interrupts
+  deactivateISR();
+
+  // select DUC
+  digitalWriteFast(c_ChipSel, HIGH);
+
+  // transfer 00000000 11110000 via "custom" quad-bit SPI
+  byte bufferInitSPI[2];
+  bufferInitSPI[0] = c_CSR;
+  bufferInitSPI[1] = 0b11110000;
+  
+  // select slave device
+  digitalWriteFast(c_ChipSel, LOW);
+
+  // send data via quad-SPI
+  quadSPIBufferTransfer(bufferInitSPI, 2);
+
+  // de-select DUC
+  digitalWriteFast(c_ChipSel, HIGH);
+
+  // issue an I/O update for changing the serial mode bits
+  ioUpdate();
+
+  // quad-SPI is not active
+  g_QuadSPIActive = false;
+
+  // print to serial monitor
+  Serial.println("\n* MCU>>>DUC single-SPI communication activated!\n");
+
+  // activate interrupts
+  activateISR();
+
+}
+
+
+/**
  * Activate external interrupt service routines.
  */
 void activateISR(){
@@ -704,6 +792,8 @@ void activateISR(){
   attachInterrupt(digitalPinToInterrupt(c_UpdateInterrupt), updateDUC, RISING);
   attachInterrupt(digitalPinToInterrupt(c_HardResetInterrupt), hardResetDUC, RISING);
   attachInterrupt(digitalPinToInterrupt(c_SoftResetInterrupt), softResetBoard, RISING);
+  attachInterrupt(digitalPinToInterrupt(c_SPIModeInterrupt), initQuadSPI, RISING);
+  attachInterrupt(digitalPinToInterrupt(c_SPIModeInterrupt), initSingleSPI, FALLING);
 
 }
 
@@ -716,7 +806,8 @@ void deactivateISR(){
   detachInterrupt(digitalPinToInterrupt(c_UpdateInterrupt));
   detachInterrupt(digitalPinToInterrupt(c_HardResetInterrupt));
   detachInterrupt(digitalPinToInterrupt(c_SoftResetInterrupt));
-  
+  detachInterrupt(digitalPinToInterrupt(c_SPIModeInterrupt));
+
 }
 
 
@@ -816,7 +907,8 @@ void spiTransferChST(byte ch, unsigned int FTW){
 
   // transfer data to DDS (custom quad-SPI)
   digitalWriteFast(c_ChipSel, LOW);
-  quadSPIBufferTransfer(bufferFTWST, sizeST);
+  if (g_QuadSPIActive) quadSPIBufferTransfer(bufferFTWST, sizeST);
+  else singleSPIBufferTransfer(bufferFTWST, sizeST);
   digitalWriteFast(c_ChipSel, HIGH);
 
 }
@@ -877,8 +969,9 @@ void spiTransferChLS(byte ch, unsigned int FTW0, unsigned int FTW1,
 
   // transfer data to DDS (custom quad-SPI)
   digitalWriteFast(c_ChipSel, LOW);
-  quadSPIBufferTransfer(bufferFTWLS, sizeLS);
-  digitalWriteFast(c_ChipSel, HIGH);  
+  if (g_QuadSPIActive) quadSPIBufferTransfer(bufferFTWLS, sizeLS);
+  else singleSPIBufferTransfer(bufferFTWLS, sizeLS);
+  digitalWriteFast(c_ChipSel, HIGH);
 
 }
 
@@ -902,8 +995,9 @@ void activateChSTM(byte chSelMask){
   bufferCFR[5] = 0x00;
 
   // transfer word to DDS via quad-SPI
-  digitalWriteFast(c_ChipSel, LOW);
-  quadSPIBufferTransfer(bufferCFR, c_CFRSize);
+  digitalWriteFast(c_ChipSel, LOW);  
+  if (g_QuadSPIActive) quadSPIBufferTransfer(bufferCFR, c_CFRSize);
+  else singleSPIBufferTransfer(bufferCFR, c_CFRSize);
   digitalWriteFast(c_ChipSel, HIGH);
 
   // issue an I/O update pulse: CFR is set
@@ -935,7 +1029,8 @@ void activateChLSM(byte chSelMask){
 
   // transfer word to DDS via quad-SPI
   digitalWriteFast(c_ChipSel, LOW);
-  quadSPIBufferTransfer(bufferCFR, c_CFRSize);
+  if (g_QuadSPIActive) quadSPIBufferTransfer(bufferCFR, c_CFRSize);
+  else singleSPIBufferTransfer(bufferCFR, c_CFRSize);
   digitalWriteFast(c_ChipSel, HIGH);
 
   // issue an I/O update pulse: CFR is set
@@ -970,14 +1065,18 @@ void selectDDSChannels(byte ch){
       bufferChSel[1] = c_chSel0 | c_chSel1 | c_chSel2 | c_chSel3;
       break;
     default:
-      bufferChSel[1] = 0b00000110;
+      bufferChSel[1] = 0b00000000;
       Serial.println("\n* No DDS channel selected: corrupted channel programming routine!\n");
       break;
   }
 
+  // adjust serial mode bits
+  if (g_QuadSPIActive) bufferChSel[1] = bufferChSel[1] | 0b00000110;
+
   // transfer buffer content to DUC (custom quad-SPI)
   digitalWriteFast(c_ChipSel, LOW);
-  quadSPIBufferTransfer(bufferChSel, c_SelSize);
+  if (g_QuadSPIActive) quadSPIBufferTransfer(bufferChSel, c_SelSize);
+  else singleSPIBufferTransfer(bufferChSel, c_SelSize);
   digitalWriteFast(c_ChipSel, HIGH);
 
 }
@@ -986,40 +1085,6 @@ void selectDDSChannels(byte ch){
 
 
 // Custom quad-SPI functions
-/**
- * Initialize quad-SPI communication.
- */
-void initQuadSPI(){ 
-
-  // select DUC
-  digitalWriteFast(c_ChipSel, HIGH);
-
-  // set quad-SPI pins
-  for (byte i = 0; i < 5; i++){
-    pinMode(c_quadSPIPins[i], OUTPUT);
-    digitalWriteFast(c_quadSPIPins[i], LOW);
-  }
-
-  // transfer 00000000 00000110 via "custom" single-bit SPI
-  byte bufferInitSPI[2];
-  bufferInitSPI[0] = c_CSR;
-  bufferInitSPI[1] = 0b11110110;
-  
-  // select slave device
-  digitalWriteFast(c_ChipSel, LOW);
-
-  // send data  
-  singleSPIBufferTransfer(bufferInitSPI, 2);
-
-  // de-select DUC
-  digitalWriteFast(c_ChipSel, HIGH);
-
-  // issue an I/O update for changing the serial mode bits
-  ioUpdate();
-
-}
-
-
 /**
  * Custom SPI 8-bit data transfer (with serial clock divider).
  * @param[in] data input byte to be transferred
