@@ -7,6 +7,7 @@
  * 
  */
 #include <Arduino.h>
+#include <avr/pgmspace.h>
 
 
 /** 
@@ -19,6 +20,9 @@
 
 
 // Global variables
+
+// debugging mode
+bool g_debug = false;
 
 // PC serial communication
 bool g_clientCXN = false;               // USB serial connection established
@@ -129,7 +133,7 @@ volatile unsigned int g_outCh2 = 0;   // channel 2 memory index (out)
 volatile unsigned int g_outCh3 = 0;   // channel 3 memory index (out)
 
 // frequency tuning word buffers
-const unsigned int c_maxSize = 5800;     // max buffer size
+const unsigned int c_maxSize = 5500;     // max buffer size
 unsigned int g_bufferFTW0Ch0[c_maxSize]; // channel 0 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)
 unsigned int g_bufferFTW1Ch0[c_maxSize]; // channel 0 buffer: chirp end frequency tuning word (Linear Sweep Mode only)             
 unsigned int g_bufferFTW0Ch1[c_maxSize]; // channel 1 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)      
@@ -162,6 +166,24 @@ byte g_bufferSingleToneMode[c_maxSize * c_Nch];
 byte g_bufferLinearSweepMode[c_maxSize * c_Nch];
 
 
+// message strings
+char c_pcUSBMsg[] PROGMEM = "\n\n* PC >>> board serial communication established!";
+char c_softRMsg[] PROGMEM = "\n* Board ""soft"" reset!";
+char c_hardRMsg[] PROGMEM = "\n* Board ""soft"" reset!";
+char c_quSPIMsg[] PROGMEM = "\n* MCU>>>DUC quad-SPI communication activated!";
+char c_sgSPIMsg[] PROGMEM = "\n* MCU>>>DUC single-SPI communication activated!";
+char c_chErrMsg[] PROGMEM = "\n* No DDS channel selected: corrupted channel programming routine!";
+char c_inMemMsg[] PROGMEM = "\n* Max memory reached! Ignoring input instruction strings...";
+char c_ch0STMsg[] PROGMEM = " . Channel 0: Single-Tone mode";
+char c_ch0LSMsg[] PROGMEM = " . Channel 0: Linear Sweep mode";
+char c_ch1STMsg[] PROGMEM = " . Channel 1: Single-Tone mode";
+char c_ch1LSMsg[] PROGMEM = " . Channel 1: Linear Sweep mode";
+char c_ch2STMsg[] PROGMEM = " . Channel 2: Single-Tone mode";
+char c_ch2LSMsg[] PROGMEM = " . Channel 2: Linear Sweep mode";
+char c_ch3STMsg[] PROGMEM = " . Channel 3: Single-Tone mode";
+char c_ch3LSMsg[] PROGMEM = " . Channel 3: Linear Sweep mode";
+
+
 
 
 // Board functions
@@ -188,7 +210,7 @@ void setup(){
 
   // initialize PC >>> board serial communication
   if (!g_clientCXN){
-    Serial.println("\n\n\n* PC >>> board serial communication established!\n");
+    Serial.println(c_pcUSBMsg);
     g_clientCXN = true;
   }
 
@@ -292,7 +314,7 @@ void decodeInstructionString(){
     g_numIn++;
   }
   // max memory reached
-  else Serial.println("\n* Max memory reached! Ignoring input instruction strings...");
+  else Serial.println(c_inMemMsg);
 
 }
 
@@ -630,7 +652,7 @@ void softResetBoard(){
   deactivateISR();
 
   // print to serial monitor
-  Serial.println("\n* Board ""soft"" reset!\n");
+  Serial.println(c_softRMsg);
   
   // reset state variables
   g_startCOM  = true;
@@ -658,7 +680,7 @@ void hardResetDUC(){
   deactivateISR();
 
   // print to serial monitor
-  Serial.println("\n* DUC ""hard"" reset!\n");
+  Serial.println(c_hardRMsg);
 
   // issue master reset pulse
   digitalWriteFast(c_HardReset, HIGH);
@@ -684,6 +706,13 @@ void updateDUC(){
 
   // re-initialize memory indices
   if (g_numOut > g_numIn) resetOutputIndices();
+
+  // debug mode
+  if (g_debug){
+    char str[20];
+    sprintf(str, "\n * %4d >>> DUC\n", g_numOut);
+    Serial.println(str);
+  }
 
   // activate channel operation modes (updated channels only)
   activateChSTM(g_bufferSingleToneMode[g_numOut]);
@@ -719,7 +748,7 @@ void initQuadSPI(){
   byte bufferInitSPI[2];
   bufferInitSPI[0] = c_CSR;
   bufferInitSPI[1] = 0b11110110;
-  
+
   // select slave device
   digitalWriteFast(c_ChipSel, LOW);
 
@@ -736,7 +765,7 @@ void initQuadSPI(){
   g_QuadSPIActive = true;
 
   // print to serial monitor
-  Serial.println("\n* MCU>>>DUC quad-SPI communication activated!\n");
+  Serial.println(c_quSPIMsg);
 
   // activate interrupts
   activateISR();
@@ -776,7 +805,7 @@ void initSingleSPI(){
   g_QuadSPIActive = false;
 
   // print to serial monitor
-  Serial.println("\n* MCU>>>DUC single-SPI communication activated!\n");
+  Serial.println(c_sgSPIMsg);
 
   // activate interrupts
   activateISR();
@@ -821,11 +850,20 @@ void updateCh0(){
 
   if (isBitSet(g_bufferSingleToneMode[g_numOut], 4)){
     spiTransferChST(0, g_bufferFTW0Ch0[g_outCh0]);
+    if (g_debug){
+      Serial.println(c_ch0STMsg);
+      printSingleTone(g_bufferFTW0Ch0[g_outCh0]);
+    }
     g_outCh0++;
   }
   else if(isBitSet(g_bufferLinearSweepMode[g_numOut], 4)){
     spiTransferChLS(0, g_bufferFTW0Ch0[g_outCh0], g_bufferFTW1Ch0[g_outCh0], g_bufferRDWCh0[g_outCh0],
-                    g_bufferFDWCh0[g_outCh0], g_bufferRSRRCh0[g_outCh0], g_bufferFSRRCh0[g_outCh0]);
+                       g_bufferFDWCh0[g_outCh0],  g_bufferRSRRCh0[g_outCh0], g_bufferFSRRCh0[g_outCh0]);
+    if (g_debug){
+      Serial.println(c_ch0LSMsg);
+      printLinearSweep(g_bufferFTW0Ch0[g_outCh0], g_bufferFTW1Ch0[g_outCh0], g_bufferRDWCh0[g_outCh0],
+                       g_bufferFDWCh0[g_outCh0],  g_bufferRSRRCh0[g_outCh0], g_bufferFSRRCh0[g_outCh0]);
+    }
     g_outCh0++;
   }
 
@@ -839,11 +877,20 @@ void updateCh1(){
 
   if (isBitSet(g_bufferSingleToneMode[g_numOut], 5)){
     spiTransferChST(1, g_bufferFTW0Ch1[g_outCh1]);
+    if (g_debug){
+      Serial.println(c_ch1STMsg);
+      printSingleTone(g_bufferFTW0Ch1[g_outCh1]);
+    }
     g_outCh1++;
   }
   else if(isBitSet(g_bufferLinearSweepMode[g_numOut], 5)){
     spiTransferChLS(1, g_bufferFTW0Ch1[g_outCh1], g_bufferFTW1Ch1[g_outCh1], g_bufferRDWCh1[g_outCh1],
-                    g_bufferFDWCh1[g_outCh1], g_bufferRSRRCh1[g_outCh1], g_bufferFSRRCh1[g_outCh1]);
+                       g_bufferFDWCh1[g_outCh1],  g_bufferRSRRCh1[g_outCh1], g_bufferFSRRCh1[g_outCh1]);
+    if (g_debug){
+      Serial.println(c_ch1LSMsg);
+      printLinearSweep(g_bufferFTW0Ch1[g_outCh1], g_bufferFTW1Ch1[g_outCh1], g_bufferRDWCh1[g_outCh1],
+                       g_bufferFDWCh1[g_outCh1],  g_bufferRSRRCh1[g_outCh1], g_bufferFSRRCh1[g_outCh1]);
+    }
     g_outCh1++;
   }
 
@@ -857,11 +904,20 @@ void updateCh2(){
 
   if (isBitSet(g_bufferSingleToneMode[g_numOut], 6)){
     spiTransferChST(2, g_bufferFTW0Ch2[g_outCh2]);
+    if (g_debug){
+      Serial.println(c_ch2STMsg);
+      printSingleTone(g_bufferFTW0Ch2[g_outCh2]);
+    }
     g_outCh2++;
   }
   else if(isBitSet(g_bufferLinearSweepMode[g_numOut], 6)){
     spiTransferChLS(2, g_bufferFTW0Ch2[g_outCh2], g_bufferFTW1Ch2[g_outCh2], g_bufferRDWCh2[g_outCh2],
                     g_bufferFDWCh2[g_outCh2], g_bufferRSRRCh2[g_outCh2], g_bufferFSRRCh2[g_outCh2]);
+    if (g_debug){
+      Serial.println(c_ch2LSMsg);
+      printLinearSweep(g_bufferFTW0Ch2[g_outCh2], g_bufferFTW1Ch2[g_outCh2], g_bufferRDWCh2[g_outCh2],
+                       g_bufferFDWCh2[g_outCh2],  g_bufferRSRRCh2[g_outCh2], g_bufferFSRRCh2[g_outCh2]);
+    }
     g_outCh2++;
   }
 
@@ -875,11 +931,20 @@ void updateCh3(){
 
   if (isBitSet(g_bufferSingleToneMode[g_numOut], 7)){
     spiTransferChST(3, g_bufferFTW0Ch3[g_outCh3]);
+    if (g_debug){
+      Serial.println(c_ch3STMsg);
+      printSingleTone(g_bufferFTW0Ch3[g_outCh3]);
+    }
     g_outCh3++;
   }
   else if(isBitSet(g_bufferLinearSweepMode[g_numOut], 7)){
     spiTransferChLS(3, g_bufferFTW0Ch3[g_outCh3], g_bufferFTW1Ch3[g_outCh3], g_bufferRDWCh3[g_outCh3],
                     g_bufferFDWCh3[g_outCh3], g_bufferRSRRCh3[g_outCh3], g_bufferFSRRCh3[g_outCh3]);
+    if (g_debug){
+      Serial.println(c_ch3LSMsg);
+      printLinearSweep(g_bufferFTW0Ch3[g_outCh3], g_bufferFTW1Ch3[g_outCh3], g_bufferRDWCh3[g_outCh3],
+                       g_bufferFDWCh3[g_outCh3],  g_bufferRSRRCh3[g_outCh3], g_bufferFSRRCh3[g_outCh3]);
+    }
     g_outCh3++;
   }
 
@@ -1066,7 +1131,7 @@ void selectDDSChannels(byte ch){
       break;
     default:
       bufferChSel[1] = 0b00000000;
-      Serial.println("\n* No DDS channel selected: corrupted channel programming routine!\n");
+      Serial.println(c_chErrMsg);
       break;
   }
 
@@ -1179,6 +1244,21 @@ float decodeFrequency(unsigned int FTW){
 
 
 /**
+ * Decode DDS frequency sweep ramp rate.
+ * @param[in] SRR sweep ramp rate
+ * @returns time step in [μs]
+ */
+float decodeSweepRampRate(byte SRR){
+
+  float dt;
+  dt = (float)(SRR / c_SyncClk);
+
+  return dt;
+
+}
+
+
+/**
  * Issue an I/O update pulse via MCU board.
  * NOTE: I/O update pulses are oversampled by the SYNC_CLK,
  * therefore their width must be greater than one SYNC_CLK period, i.e. 8 ns.
@@ -1243,16 +1323,16 @@ void printSerialCOM(){
 
   // info  
   float elapsed = (g_currenTime - g_starTime) * 0.001;
-  Serial.print("* PC >>> board serial communication complete!\n");
-  Serial.print("  Received: ");
+  Serial.print(F("\n* PC >>> board serial communication complete!\n"));
+  Serial.print(F("  Received: "));
   Serial.print(g_byteCount);
-  Serial.print(" B, ");
+  Serial.print(F(" B, "));
   Serial.print(elapsed);
-  Serial.print(" ms");
+  Serial.print(F(" ms"));
   float rate = (float) g_byteCount / elapsed;
-  Serial.print(", rate = ");
+  Serial.print(F(", rate = "));
   Serial.print(rate);
-  Serial.println(" kB/s\n");
+  Serial.println(F(" kB/s\n"));
 
 }
 
@@ -1278,4 +1358,76 @@ void printUint(unsigned int UI){
     if(i % 4 == 0) Serial.print(" ");
   } 
   Serial.println();
+}
+
+
+/**
+ * Print single-tone channel configuration.
+ */
+void printSingleTone(unsigned int FTW){
+
+  char str[20];
+
+  Serial.print(F("   FTW:      "));
+  printUint(FTW);
+
+  sprintf(str, "   f  [MHz]:       %.6f\n", decodeFrequency(FTW));
+  Serial.println(str);
+
+}
+
+
+/**
+ * Print linear sweep channel configuration.
+ */
+void printLinearSweep(unsigned int FTW0, unsigned int FTW1, unsigned int RDW, unsigned int FDW, byte RSRR, byte FSRR){
+
+  char  str[30];
+  float df;
+  float dt;
+
+  // start frequency
+  Serial.println(F("   Start"));
+  Serial.print(F("   FTW0:     "));
+  printUint(FTW0);  
+  sprintf(str,   "   f  [MHz]:       %.6f\n", decodeFrequency(FTW0));
+  Serial.println(str);
+
+  // end frequency
+  Serial.println(F("   End"));
+  Serial.print(F("   FTW1:     "));
+  printUint(FTW0);
+  sprintf(str,   "   f  [MHz]:       %.6f\n", decodeFrequency(FTW1));
+  Serial.println(str);
+
+  // rising ramp phase
+  df = decodeFrequency(RDW);
+  dt = decodeSweepRampRate(RSRR);
+  Serial.println(F("   Rise"));
+  Serial.print(F("   RDW:      "));
+  printUint(RDW);  
+  sprintf(str,   "   df [MHz]:       %.9f\n", df);
+  Serial.print(str);
+  Serial.print(F("   RSRR:           "));
+  printByte(RSRR);
+  sprintf(str,   "   dt  [us]:       %.3f\n", dt);
+  Serial.print(str);
+  sprintf(str,   "   chirp [MHz/us]: %.6f\n", df/dt);
+  Serial.println(str);
+
+  // falling ramp phase
+  df = decodeFrequency(FDW);
+  dt = decodeSweepRampRate(FSRR);
+  Serial.println(F("   Fall"));
+  Serial.print(F("   FDW:            "));
+  printUint(FDW);
+  sprintf(str,   "   df [MHz]:       %.9f\n", df);
+  Serial.println(str);
+  Serial.print(F("   FSRR:           "));
+  printByte(FSRR);
+  sprintf(str,   "   dt  [us]:       %.3f\n", dt);
+  Serial.println(str);
+  sprintf(str,   "   chirp [MHz/us]: %.6f\n", df/dt);
+  Serial.println(str);           
+
 }
