@@ -133,7 +133,7 @@ volatile unsigned int g_outCh2 = 0;   // channel 2 memory index (out)
 volatile unsigned int g_outCh3 = 0;   // channel 3 memory index (out)
 
 // frequency tuning word buffers
-const unsigned int c_maxSize = 5500;     // max buffer size
+const unsigned int c_maxSize = 5000;     // max buffer size
 unsigned int g_bufferFTW0Ch0[c_maxSize]; // channel 0 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)
 unsigned int g_bufferFTW1Ch0[c_maxSize]; // channel 0 buffer: chirp end frequency tuning word (Linear Sweep Mode only)             
 unsigned int g_bufferFTW0Ch1[c_maxSize]; // channel 1 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)      
