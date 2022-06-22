@@ -174,14 +174,8 @@ char c_quSPIMsg[] PROGMEM = "\n* MCU>>>DUC quad-SPI communication activated!";
 char c_sgSPIMsg[] PROGMEM = "\n* MCU>>>DUC single-SPI communication activated!";
 char c_chErrMsg[] PROGMEM = "\n* No DDS channel selected: corrupted channel programming routine!";
 char c_inMemMsg[] PROGMEM = "\n* Max memory reached! Ignoring input instruction strings...";
-char c_ch0STMsg[] PROGMEM = " . Channel 0: Single-Tone mode";
-char c_ch0LSMsg[] PROGMEM = " . Channel 0: Linear Sweep mode";
-char c_ch1STMsg[] PROGMEM = " . Channel 1: Single-Tone mode";
-char c_ch1LSMsg[] PROGMEM = " . Channel 1: Linear Sweep mode";
-char c_ch2STMsg[] PROGMEM = " . Channel 2: Single-Tone mode";
-char c_ch2LSMsg[] PROGMEM = " . Channel 2: Linear Sweep mode";
-char c_ch3STMsg[] PROGMEM = " . Channel 3: Single-Tone mode";
-char c_ch3LSMsg[] PROGMEM = " . Channel 3: Linear Sweep mode";
+char c_STModMsg[] PROGMEM = " Single-Tone mode";
+char c_LSModMsg[] PROGMEM = " Linear Sweep mode";
 
 
 
@@ -370,12 +364,26 @@ void storeParsedValues(byte cfgHdr){
   byte RSRR;
   byte FSRR;
 
+  // debug mode
+  if (g_debug){
+    char str[20];
+    sprintf(str, "\n * %4d >>> MCU\n", g_numIn);
+    Serial.println(str);
+  }
+
   // backward loop over channels (from 3 to 0)
   byte offset = 0;
   for (byte ch = c_Nch - 1; ch >= 1; ch--){
 
     // check channel selection bit in cfgHdr
     if (isBitSet(cfgHdr, ch + c_Nch)){
+      
+      // debug mode
+      if (g_debug){
+        char strCh[15];
+        sprintf(strCh, " . Channel %d: ", ch);
+        Serial.print(strCh);
+      } 
 
       // check channel mode bit in cfgHdr (0: STM; 1: LSM)
       if (isBitSet(cfgHdr, ch)){
@@ -408,6 +416,12 @@ void storeParsedValues(byte cfgHdr){
         // fill memory
         storeLinearSweep(ch, FTW0, FTW1, RDW, FDW, RSRR, FSRR);
 
+        // debug mode
+        if (g_debug){
+          Serial.println(c_LSModMsg);
+          printLinearSweep(FTW0, FTW1, RDW, FDW, RSRR, FSRR);
+        }       
+
       }
       else{
         
@@ -417,6 +431,12 @@ void storeParsedValues(byte cfgHdr){
 
         // fill memory
         storeSingleTone(ch, FTW0);
+
+        // debug mode
+        if (g_debug){
+          Serial.println(c_STModMsg);
+          printSingleTone(FTW0);
+        }
 
       }
 
@@ -851,7 +871,8 @@ void updateCh0(){
   if (isBitSet(g_bufferSingleToneMode[g_numOut], 4)){
     spiTransferChST(0, g_bufferFTW0Ch0[g_outCh0]);
     if (g_debug){
-      Serial.println(c_ch0STMsg);
+      Serial.print(F(" . Channel 0: "));
+      Serial.println(c_STModMsg);
       printSingleTone(g_bufferFTW0Ch0[g_outCh0]);
     }
     g_outCh0++;
@@ -860,7 +881,8 @@ void updateCh0(){
     spiTransferChLS(0, g_bufferFTW0Ch0[g_outCh0], g_bufferFTW1Ch0[g_outCh0], g_bufferRDWCh0[g_outCh0],
                        g_bufferFDWCh0[g_outCh0],  g_bufferRSRRCh0[g_outCh0], g_bufferFSRRCh0[g_outCh0]);
     if (g_debug){
-      Serial.println(c_ch0LSMsg);
+      Serial.print(F(" . Channel 0: "));
+      Serial.println(c_LSModMsg);
       printLinearSweep(g_bufferFTW0Ch0[g_outCh0], g_bufferFTW1Ch0[g_outCh0], g_bufferRDWCh0[g_outCh0],
                        g_bufferFDWCh0[g_outCh0],  g_bufferRSRRCh0[g_outCh0], g_bufferFSRRCh0[g_outCh0]);
     }
@@ -878,7 +900,8 @@ void updateCh1(){
   if (isBitSet(g_bufferSingleToneMode[g_numOut], 5)){
     spiTransferChST(1, g_bufferFTW0Ch1[g_outCh1]);
     if (g_debug){
-      Serial.println(c_ch1STMsg);
+      Serial.print(F(" . Channel 1: "));
+      Serial.println(c_STModMsg);
       printSingleTone(g_bufferFTW0Ch1[g_outCh1]);
     }
     g_outCh1++;
@@ -887,7 +910,8 @@ void updateCh1(){
     spiTransferChLS(1, g_bufferFTW0Ch1[g_outCh1], g_bufferFTW1Ch1[g_outCh1], g_bufferRDWCh1[g_outCh1],
                        g_bufferFDWCh1[g_outCh1],  g_bufferRSRRCh1[g_outCh1], g_bufferFSRRCh1[g_outCh1]);
     if (g_debug){
-      Serial.println(c_ch1LSMsg);
+      Serial.print(F(" . Channel 1: "));
+      Serial.println(c_LSModMsg);
       printLinearSweep(g_bufferFTW0Ch1[g_outCh1], g_bufferFTW1Ch1[g_outCh1], g_bufferRDWCh1[g_outCh1],
                        g_bufferFDWCh1[g_outCh1],  g_bufferRSRRCh1[g_outCh1], g_bufferFSRRCh1[g_outCh1]);
     }
@@ -905,7 +929,8 @@ void updateCh2(){
   if (isBitSet(g_bufferSingleToneMode[g_numOut], 6)){
     spiTransferChST(2, g_bufferFTW0Ch2[g_outCh2]);
     if (g_debug){
-      Serial.println(c_ch2STMsg);
+      Serial.print(F(" . Channel 2: "));
+      Serial.println(c_STModMsg);
       printSingleTone(g_bufferFTW0Ch2[g_outCh2]);
     }
     g_outCh2++;
@@ -914,7 +939,8 @@ void updateCh2(){
     spiTransferChLS(2, g_bufferFTW0Ch2[g_outCh2], g_bufferFTW1Ch2[g_outCh2], g_bufferRDWCh2[g_outCh2],
                     g_bufferFDWCh2[g_outCh2], g_bufferRSRRCh2[g_outCh2], g_bufferFSRRCh2[g_outCh2]);
     if (g_debug){
-      Serial.println(c_ch2LSMsg);
+      Serial.print(F(" . Channel 2: "));
+      Serial.println(c_LSModMsg);
       printLinearSweep(g_bufferFTW0Ch2[g_outCh2], g_bufferFTW1Ch2[g_outCh2], g_bufferRDWCh2[g_outCh2],
                        g_bufferFDWCh2[g_outCh2],  g_bufferRSRRCh2[g_outCh2], g_bufferFSRRCh2[g_outCh2]);
     }
@@ -932,7 +958,8 @@ void updateCh3(){
   if (isBitSet(g_bufferSingleToneMode[g_numOut], 7)){
     spiTransferChST(3, g_bufferFTW0Ch3[g_outCh3]);
     if (g_debug){
-      Serial.println(c_ch3STMsg);
+      Serial.print(F(" . Channel 3: "));
+      Serial.println(c_STModMsg);
       printSingleTone(g_bufferFTW0Ch3[g_outCh3]);
     }
     g_outCh3++;
@@ -941,7 +968,8 @@ void updateCh3(){
     spiTransferChLS(3, g_bufferFTW0Ch3[g_outCh3], g_bufferFTW1Ch3[g_outCh3], g_bufferRDWCh3[g_outCh3],
                     g_bufferFDWCh3[g_outCh3], g_bufferRSRRCh3[g_outCh3], g_bufferFSRRCh3[g_outCh3]);
     if (g_debug){
-      Serial.println(c_ch3LSMsg);
+      Serial.print(F(" . Channel 3: "));
+      Serial.println(c_LSModMsg);
       printLinearSweep(g_bufferFTW0Ch3[g_outCh3], g_bufferFTW1Ch3[g_outCh3], g_bufferRDWCh3[g_outCh3],
                        g_bufferFDWCh3[g_outCh3],  g_bufferRSRRCh3[g_outCh3], g_bufferFSRRCh3[g_outCh3]);
     }
