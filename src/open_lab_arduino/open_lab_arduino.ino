@@ -1,9 +1,9 @@
  /**
  * > Open Source Laboratory Instrument Project:
- *   Control Software for Teensy 4.1 board
+ *   Control Software for AD9959 DDS
  * 
  * > Author
- *   Michele Sorelli 2022
+ *   Michele Sorelli (2022)
  * 
  */
 #include <Arduino.h>
