@@ -286,17 +286,15 @@ void readSerialPort(){
  * Decode input instruction strings and store data into memory buffers.
  */
 void decodeInstructionString(){
+
+  // declare channels configuration header
+  byte cfgHdr;
   
   // available memory
   if (g_numIn < c_maxSize){
-
-    // decode configuration header
-    byte cfgHdr;
-    cfgHdr = (byte)g_inString.charAt(0);
-    g_inString.remove(0, 1);
-
-    // decode operation mode nibble
-    decodeChannelHeader(cfgHdr);
+  
+    // get configuration header
+    cfgHdr = decodeChannelHeader();
 
     // parse incoming data
     parseInstructionString();
@@ -317,9 +315,16 @@ void decodeInstructionString(){
  * Decode channel activation byte header.
  * MSN: updated channels (0: do not update; 1: update);
  * LSN: channels operation mode (0: Single-Tone mode; 1: Linear Sweep mode).
- * @param[in] cfgHdr DUC channels configuration header
+ * @returns DUC channels configuration header
  */
-void decodeChannelHeader(byte cfgHdr){
+byte decodeChannelHeader(){
+
+  // get configuration header
+  byte sep_idx = g_inString.indexOf(',', 0);
+  byte cfgHdr = (byte)(g_inString.substring(0, sep_idx)).toInt();
+
+  // remove it from input data string
+  g_inString.remove(0, sep_idx + 1);
 
   // channels operation mode byte
   byte chLSModByte = ( ((cfgHdr & c_Mask8Nibble14) << 4) & (cfgHdr & c_Mask8Nibble04));
@@ -328,6 +333,8 @@ void decodeChannelHeader(byte cfgHdr){
   // fill channel operation mode buffers
   g_bufferSingleToneMode[g_numIn]  = chSTModByte;
   g_bufferLinearSweepMode[g_numIn] = chLSModByte;
+
+  return cfgHdr;
 
 }
 
