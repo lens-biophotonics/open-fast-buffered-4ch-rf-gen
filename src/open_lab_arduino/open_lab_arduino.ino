@@ -620,6 +620,7 @@ void initDigitalPins(){
   pinMode(c_UpdateInterrupt, INPUT_PULLUP);
   pinMode(c_SoftResetInterrupt, INPUT_PULLUP);
   pinMode(c_HardResetInterrupt, INPUT_PULLUP);
+  pinMode(c_SPIModeInterrupt, INPUT_PULLUP);
 
 }
 
