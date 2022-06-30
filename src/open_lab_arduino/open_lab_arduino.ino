@@ -23,11 +23,11 @@
 // Global variables
 
 // debugging mode
-bool g_debug = false;
+bool g_debug = true;
 
 // PC serial communication
-bool g_clientCXN = false;               // USB serial connection established
-volatile bool g_startCOM = true;        // start serial communication flag
+bool g_clientCXN = false;       // USB serial connection established
+bool g_endCOM    = true;        // start serial communication flag
 unsigned long g_currenTime;
 unsigned long g_starTime;
 volatile unsigned long g_byteCount = 0;
@@ -87,16 +87,16 @@ const byte  c_Tassert = 1;                    //  [μs]    DDS master reset and 
 const byte c_DDSbits = 32; 
 
 // AD9959 DAC channels
-const byte c_Nch = 4;
+const unsigned int c_Nch = 4;
 const byte c_chSel0 = 0b00010000; // selection bytes
 const byte c_chSel1 = 0b00100000;
 const byte c_chSel2 = 0b01000000;
 const byte c_chSel3 = 0b10000000;
-const byte c_Ch0    = 0;          // IDs
-const byte c_Ch1    = 1;
-const byte c_Ch2    = 2;
-const byte c_Ch3    = 3;
-const byte c_ChAll  = 4;
+const unsigned int c_Ch0   = 0;          // IDs
+const unsigned int c_Ch1   = 1;
+const unsigned int c_Ch2   = 2;
+const unsigned int c_Ch3   = 3;
+const unsigned int c_ChAll = 4;
 
 
 // AD9959 register addresses
@@ -117,64 +117,60 @@ const byte c_CFRSize = 6;
 
 
 // input to MCU board
+const unsigned int c_maxSize = 4000;  // max buffer size
+using byteBuffer   = CircularBuffer<byte, c_maxSize>;
+using uintBuffer   = CircularBuffer<unsigned int, c_maxSize>;
+using stringBuffer = CircularBuffer<String, c_maxSize>;
 String g_inString  = "";              // input instruction string
-float g_parsedValues[24];             // array of parsed values
+stringBuffer g_inStringBuffer;        // input string FIFO buffer
 volatile unsigned int g_numIn = 0;    // overall input setting counter
-volatile unsigned int g_inCh0 = 0;    // channel 0 memory index (in)
-volatile unsigned int g_inCh1 = 0;    // channel 1 memory index (in)
-volatile unsigned int g_inCh2 = 0;    // channel 2 memory index (in)
-volatile unsigned int g_inCh3 = 0;    // channel 3 memory index (in)
+String g_outString = "";              // decoded instruction string
+float g_parsedValues[24];             // array of parsed values
 
 
 // output from MCU board
 volatile unsigned int g_numOut = 0;   // overall output setting counter
-volatile unsigned int g_outCh0 = 0;   // channel 0 memory index (out)
-volatile unsigned int g_outCh1 = 0;   // channel 1 memory index (out)
-volatile unsigned int g_outCh2 = 0;   // channel 2 memory index (out)
-volatile unsigned int g_outCh3 = 0;   // channel 3 memory index (out)
-
-// frequency tuning word buffers
-const unsigned int c_maxSize = 5000;     // max buffer size
-unsigned int g_bufferFTW0Ch0[c_maxSize]; // channel 0 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)
-unsigned int g_bufferFTW1Ch0[c_maxSize]; // channel 0 buffer: chirp end frequency tuning word (Linear Sweep Mode only)             
-unsigned int g_bufferFTW0Ch1[c_maxSize]; // channel 1 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)      
-unsigned int g_bufferFTW1Ch1[c_maxSize]; // channel 1 buffer: chirp end frequency tuning word (Linear Sweep Mode only)      
-unsigned int g_bufferFTW0Ch2[c_maxSize]; // channel 2 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)
-unsigned int g_bufferFTW1Ch2[c_maxSize]; // channel 2 buffer: chirp end frequency tuning word (Linear Sweep Mode only)
-unsigned int g_bufferFTW0Ch3[c_maxSize]; // channel 3 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)
-unsigned int g_bufferFTW1Ch3[c_maxSize]; // channel 3 buffer: chirp end frequency tuning word (Linear Sweep Mode only)
+uintBuffer g_bufferFTW0Ch0;           // channel 0 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)
+uintBuffer g_bufferFTW1Ch0;           // channel 0 buffer: chirp end frequency tuning word (Linear Sweep Mode only)             
+uintBuffer g_bufferFTW0Ch1;           // channel 1 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)      
+uintBuffer g_bufferFTW1Ch1;           // channel 1 buffer: chirp end frequency tuning word (Linear Sweep Mode only)      
+uintBuffer g_bufferFTW0Ch2;           // channel 2 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)
+uintBuffer g_bufferFTW1Ch2;           // channel 2 buffer: chirp end frequency tuning word (Linear Sweep Mode only)
+uintBuffer g_bufferFTW0Ch3;           // channel 3 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)
+uintBuffer g_bufferFTW1Ch3;           // channel 3 buffer: chirp end frequency tuning word (Linear Sweep Mode only)
 
 // linear frequency sweep time/frequency step tuning words
-unsigned int g_bufferRDWCh0[c_maxSize];  // channel 0 buffer: Rising  (frequency) Delta Word buffer
-unsigned int g_bufferRDWCh1[c_maxSize];  // channel 1 buffer: Rising  (frequency) Delta Word buffer
-unsigned int g_bufferRDWCh2[c_maxSize];  // channel 2 buffer: Rising  (frequency) Delta Word buffer
-unsigned int g_bufferRDWCh3[c_maxSize];  // channel 3 buffer: Rising  (frequency) Delta Word buffer
-unsigned int g_bufferFDWCh0[c_maxSize];  // channel 0 buffer: Falling (frequency) Delta Word buffer
-unsigned int g_bufferFDWCh1[c_maxSize];  // channel 1 buffer: Falling (frequency) Delta Word buffer
-unsigned int g_bufferFDWCh2[c_maxSize];  // channel 2 buffer: Falling (frequency) Delta Word buffer
-unsigned int g_bufferFDWCh3[c_maxSize];  // channel 3 buffer: Falling (frequency) Delta Word buffer
-byte         g_bufferRSRRCh0[c_maxSize]; // channel 0 buffer: Rising Step Ramp Rate
-byte         g_bufferRSRRCh1[c_maxSize]; // channel 1 buffer: Rising Step Ramp Rate
-byte         g_bufferRSRRCh2[c_maxSize]; // channel 2 buffer: Rising Step Ramp Rate
-byte         g_bufferRSRRCh3[c_maxSize]; // channel 3 buffer: Rising Step Ramp Rate
-byte         g_bufferFSRRCh0[c_maxSize]; // channel 0 buffer: Falling Step Ramp Rate
-byte         g_bufferFSRRCh1[c_maxSize]; // channel 1 buffer: Falling Step Ramp Rate
-byte         g_bufferFSRRCh2[c_maxSize]; // channel 2 buffer: Falling Step Ramp Rate
-byte         g_bufferFSRRCh3[c_maxSize]; // channel 3 buffer: Falling Step Ramp Rate
+uintBuffer g_bufferRDWCh0;            // channel 0 buffer: Rising  (frequency) Delta Word buffer
+uintBuffer g_bufferRDWCh1;            // channel 1 buffer: Rising  (frequency) Delta Word buffer
+uintBuffer g_bufferRDWCh2;            // channel 2 buffer: Rising  (frequency) Delta Word buffer
+uintBuffer g_bufferRDWCh3;            // channel 3 buffer: Rising  (frequency) Delta Word buffer
+uintBuffer g_bufferFDWCh0;            // channel 0 buffer: Falling (frequency) Delta Word buffer
+uintBuffer g_bufferFDWCh1;            // channel 1 buffer: Falling (frequency) Delta Word buffer
+uintBuffer g_bufferFDWCh2;            // channel 2 buffer: Falling (frequency) Delta Word buffer
+uintBuffer g_bufferFDWCh3;            // channel 3 buffer: Falling (frequency) Delta Word buffer
+byteBuffer g_bufferRSRRCh0;           // channel 0 buffer: Rising Step Ramp Rate
+byteBuffer g_bufferRSRRCh1;           // channel 1 buffer: Rising Step Ramp Rate
+byteBuffer g_bufferRSRRCh2;           // channel 2 buffer: Rising Step Ramp Rate
+byteBuffer g_bufferRSRRCh3;           // channel 3 buffer: Rising Step Ramp Rate
+byteBuffer g_bufferFSRRCh0;           // channel 0 buffer: Falling Step Ramp Rate
+byteBuffer g_bufferFSRRCh1;           // channel 1 buffer: Falling Step Ramp Rate
+byteBuffer g_bufferFSRRCh2;           // channel 2 buffer: Falling Step Ramp Rate
+byteBuffer g_bufferFSRRCh3;           // channel 3 buffer: Falling Step Ramp Rate
 
 // channel operation mode mask buffer
-byte g_bufferSingleToneMode[c_maxSize * c_Nch];
-byte g_bufferLinearSweepMode[c_maxSize * c_Nch];
+CircularBuffer<byte, c_maxSize * c_Nch> g_bufferSingleToneMode;
+CircularBuffer<byte, c_maxSize * c_Nch> g_bufferLinearSweepMode;
 
 
 // message strings
-char c_pcUSBMsg[] PROGMEM = "\n* PC >>> board serial communication established!";
-char c_softRMsg[] PROGMEM = "\n* Board ""soft"" reset!";
-char c_hardRMsg[] PROGMEM = "\n* Board ""soft"" reset!";
-char c_quSPIMsg[] PROGMEM = "\n* MCU >>> DUC quad-SPI communication activated!";
-char c_sgSPIMsg[] PROGMEM = "\n* MCU >>> DUC single-SPI communication activated!";
-char c_chErrMsg[] PROGMEM = "\n* No DDS channel selected: corrupted channel programming routine!";
-char c_inMemMsg[] PROGMEM = "\n* Max memory reached! Ignoring input instruction strings...";
+char c_pcUSBMsg[] PROGMEM = "\n * PC >>> MCU serial communication established!";
+char c_softRMsg[] PROGMEM = "\n * MCU ""soft"" reset!";
+char c_hardRMsg[] PROGMEM = "\n * MCU ""soft"" reset!";
+char c_quSPIMsg[] PROGMEM = "\n * MCU >>> DUC quad-SPI communication activated!";
+char c_sgSPIMsg[] PROGMEM = "\n * MCU >>> DUC single-SPI communication activated!";
+char c_chErrMsg[] PROGMEM = "\n * No DDS channel selected: corrupted channel programming routine!";
+char c_inMemMsg[] PROGMEM = "\n * Max memory reached! Ignoring input instruction strings...";
+char c_inStrMsg[] PROGMEM = "\n * String buffer full! Ignoring input instruction strings...";
 char c_STModMsg[] PROGMEM = "     Single-Tone mode";
 char c_LSModMsg[] PROGMEM = "     Linear Sweep mode";
 
@@ -194,9 +190,6 @@ void setup(){
   // reset DUC
   // (master reset signal and DUC initialization)
   // hardResetDUC();
-
-  // initialize frequency tuning word buffers
-  initFTWBuffers();
 
   // initialize serial monitor (max baud rate)
   Serial.begin(115200);
@@ -222,6 +215,9 @@ void loop(){
   // listen to USB serial port
   readSerialPort();
 
+  // decode input data strings
+  decodeDataString();
+
 }
 
 
@@ -235,28 +231,33 @@ void readSerialPort(){
 
   if (Serial.available()){
 
-    // get input instruction string
+    // get incoming char(s)
     char inChar = (char)Serial.read();
     g_byteCount++;
 
-    // get communication start string: start timer
-    if (g_startCOM){
+    Serial.println(inChar);
+
+    // start communication timer
+    if (g_endCOM){
 
       // deactivate interrupts
       // deactivateISR();
 
       // serial communication has started
-      g_startCOM = false;
+      g_endCOM = false;
       g_starTime = micros();
     }
 
-    // convert incoming bytes to char,
-    // add them to string as long as they are not a newline
+    // add char to string as long as it is not a newline
     if (inChar != '\n') g_inString += inChar;
     else{
 
-      // decode instruction strings
-      if (g_inString.equals("E") == false) decodeInstructionString();
+      // push incoming string into FIFO string buffer
+      if (!g_inString.equals("END")){
+        if (!g_inStringBuffer.isFull()) g_inStringBuffer.push(g_inString);
+        else Serial.println(c_inStrMsg);
+      }
+
       // end of communication
       else{
 
@@ -267,11 +268,11 @@ void readSerialPort(){
         // activateISR();
 
         // a new serial communication will start
-        g_startCOM = true;
-              
+        g_endCOM = true;
+
       }
 
-      // delete strings
+      // delete string
       g_inString = "";
 
     }
@@ -284,28 +285,35 @@ void readSerialPort(){
 /**
  * Decode input instruction strings and store data into memory buffers.
  */
-void decodeInstructionString(){
-
-  // declare channels configuration header
-  byte cfgHdr;
+void decodeDataString(){
   
-  // available memory
-  if (g_numIn < c_maxSize){
+  // if not communicating
+  if (g_endCOM == true){
+
+    // strings available for decoding
+    if (!g_inStringBuffer.isEmpty()){
+      
+      // wait for serial prints when debugging
+      if (g_debug) delay(1000);
+
+      // "pop" data string from input buffer
+      g_outString = g_inStringBuffer.shift();
   
-    // get configuration header
-    cfgHdr = decodeChannelHeader();
+      // get configuration header
+      byte cfgHdr = decodeChannelHeader();
 
-    // parse incoming data
-    parseInstructionString();
+      // parse incoming data
+      parseDataString();
 
-    // encode and store parsed data
-    storeParsedValues(cfgHdr);
+      // encode and store parsed data
+      storeParsedValues(cfgHdr);
 
-    // increase overall input counter
-    g_numIn++;
+      // increase overall input counter
+      g_numIn++;
+
+    }
+
   }
-  // max memory reached
-  else Serial.println(c_inMemMsg);
 
 }
 
@@ -319,19 +327,19 @@ void decodeInstructionString(){
 byte decodeChannelHeader(){
 
   // get configuration header
-  byte sep_idx = g_inString.indexOf(',', 0);
-  byte cfgHdr = (byte)(g_inString.substring(0, sep_idx)).toInt();
+  byte sep_idx = g_outString.indexOf(',', 0);
+  byte cfgHdr = (byte)(g_outString.substring(0, sep_idx)).toInt();
 
   // remove it from input data string
-  g_inString.remove(0, sep_idx + 1);
+  g_outString.remove(0, sep_idx + 1);
 
   // channels operation mode byte
   byte chLSModByte = ( ((cfgHdr & c_Mask8Nibble14) << 4) & (cfgHdr & c_Mask8Nibble04));
   byte chSTModByte = (~((cfgHdr & c_Mask8Nibble14) << 4) & (cfgHdr & c_Mask8Nibble04));
 
-  // fill channel operation mode buffers
-  g_bufferSingleToneMode[g_numIn]  = chSTModByte;
-  g_bufferLinearSweepMode[g_numIn] = chLSModByte;
+  // push channel operation mode into FIFO buffers
+  g_bufferSingleToneMode.push(chSTModByte);
+  g_bufferLinearSweepMode.push(chLSModByte);
 
   return cfgHdr;
 
@@ -339,18 +347,18 @@ byte decodeChannelHeader(){
 
 
 /**
- * Parse comma-separated instruction string.
+ * Parse comma-separated data string.
  * 
  */
-void parseInstructionString(){
+void parseDataString(){
 
 byte v = 0;
 int start_idx = 0;
-int sep_idx = g_inString.indexOf(',', start_idx + 1);
+int sep_idx = g_outString.indexOf(',', start_idx + 1);
 while (sep_idx != -1){  
-  g_parsedValues[v] = (g_inString.substring(start_idx, sep_idx)).toFloat();
+  g_parsedValues[v] = (g_outString.substring(start_idx, sep_idx)).toFloat();
   start_idx = sep_idx + 1;
-  sep_idx = g_inString.indexOf(',', start_idx);
+  sep_idx = g_outString.indexOf(',', start_idx);
   v++;  
 }
 
@@ -376,36 +384,30 @@ void storeParsedValues(byte cfgHdr){
     char str[20];
     sprintf(str, "\n * %d >>> MCU\n", g_numIn);
     Serial.println(str);
-    delay(100);
   }
 
   // backward loop over channels (from 3 to 0)
-  byte offset = 0;
-  for (byte ch = c_Nch - 1; ch >= 0 ; ch--){
-   
+  unsigned int offset = 0;
+  for (unsigned int ch = 0; ch < c_Nch; ch++){
+    
     // check channel selection bit in cfgHdr
-    if (bitRead(cfgHdr, ch + c_Nch) == 1){
-      
+    if (bitRead(cfgHdr, ch + c_Nch)){
+     
       // debug mode
       if (g_debug){
-        char strCh[15];
+        char strCh[20];
         sprintf(strCh, " . Channel %d: ", ch);
         Serial.print(strCh);
-        delay(100);
       } 
 
       // check channel mode bit in cfgHdr (0: STM; 1: LSM)
-      if (bitRead(cfgHdr, ch) == 1){
-
-        // linear sweep mode: 6 values
-        float freqStart = g_parsedValues[offset];
-        float freqEnd   = g_parsedValues[offset + 1];
+      if (bitRead(cfgHdr, ch)){
 
         // check sweeping direction
         // up
-        if (freqStart <= freqEnd){
-          FTW0 = encodeFTW(freqStart);
-          FTW1 = encodeFTW(freqEnd);
+        if (g_parsedValues[offset] <= g_parsedValues[offset + 1]){
+          FTW0 = encodeFTW(g_parsedValues[offset]);
+          FTW1 = encodeFTW(g_parsedValues[offset + 1]);
           RDW  = encodeFTW(g_parsedValues[offset + 2]);
           FDW  = encodeFTW(g_parsedValues[offset + 3]);
           RSRR = (byte)(g_parsedValues[offset + 4] * c_SyncClk);
@@ -413,8 +415,8 @@ void storeParsedValues(byte cfgHdr){
         }
         // down
         else{
-          FTW0 = encodeFTW(freqEnd);
-          FTW1 = encodeFTW(freqStart);
+          FTW0 = encodeFTW(g_parsedValues[offset + 1]);
+          FTW1 = encodeFTW(g_parsedValues[offset]);
           RDW  = encodeFTW(g_parsedValues[offset + 3]);
           FDW  = encodeFTW(g_parsedValues[offset + 2]);
           RSRR = (byte)(g_parsedValues[offset + 5] * c_SyncClk);
@@ -429,11 +431,10 @@ void storeParsedValues(byte cfgHdr){
         if (g_debug){
           Serial.println(c_LSModMsg);
           printLinearSweep(FTW0, FTW1, RDW, FDW, RSRR, FSRR);
-          delay(100);
-        }       
+        } 
 
       }
-      else{
+      else{        
         
         // single-tone mode: 1 value
         FTW0 = encodeFTW(g_parsedValues[offset]);
@@ -446,9 +447,8 @@ void storeParsedValues(byte cfgHdr){
         if (g_debug){
           Serial.println(c_STModMsg);
           printSingleTone(FTW0);
-          delay(100);
         }
-
+        
       }
 
     }
@@ -463,24 +463,20 @@ void storeParsedValues(byte cfgHdr){
  * @param[in] ch  DUC channel
  * @param[in] FTW single-tone frequency tuning word
  */
-void storeSingleTone(byte ch, unsigned int FTW){
+void storeSingleTone(unsigned int ch, unsigned int FTW){
 
   switch (ch){
     case c_Ch0:
-      g_bufferFTW0Ch0[g_inCh0] = FTW;
-      g_inCh0++;
+      g_bufferFTW0Ch0.push(FTW);
       break;
     case c_Ch1:
-      g_bufferFTW0Ch1[g_inCh1] = FTW;
-      g_inCh1++;
+      g_bufferFTW0Ch1.push(FTW);
       break;
     case c_Ch2:
-      g_bufferFTW0Ch2[g_inCh2] = FTW;
-      g_inCh2++;
+      g_bufferFTW0Ch2.push(FTW);
       break;
     case c_Ch3:
-      g_bufferFTW0Ch3[g_inCh3] = FTW;
-      g_inCh3++;
+      g_bufferFTW0Ch3.push(FTW);
       break;
   }
 
@@ -498,45 +494,41 @@ void storeSingleTone(byte ch, unsigned int FTW){
  * @param[in] FSRR falling step ramp rate
  * 
  */
-void storeLinearSweep(byte ch, unsigned int FTW0, unsigned int FTW1,
+void storeLinearSweep(unsigned int ch, unsigned int FTW0, unsigned int FTW1,
                       unsigned int RDW, unsigned int FDW, byte RSRR, byte FSRR){
 
   switch (ch){
     case c_Ch0:
-      g_bufferFTW0Ch0[g_inCh0] = FTW0;
-      g_bufferFTW1Ch0[g_inCh0] = FTW1;
-      g_bufferRDWCh0[g_inCh0]  = RDW;
-      g_bufferFDWCh0[g_inCh0]  = FDW;
-      g_bufferRSRRCh0[g_inCh0] = RSRR;
-      g_bufferFSRRCh0[g_inCh0] = FSRR;
-      g_inCh0++;
+      g_bufferFTW0Ch0.push(FTW0);
+      g_bufferFTW1Ch0.push(FTW1);
+      g_bufferRDWCh0.push(RDW);
+      g_bufferFDWCh0.push(FDW);
+      g_bufferRSRRCh0.push(RSRR);
+      g_bufferFSRRCh0.push(FSRR);
       break;
     case c_Ch1:
-      g_bufferFTW0Ch1[g_inCh1] = FTW0;
-      g_bufferFTW1Ch1[g_inCh1] = FTW1;
-      g_bufferRDWCh1[g_inCh1]  = RDW;
-      g_bufferFDWCh1[g_inCh1]  = FDW;
-      g_bufferRSRRCh1[g_inCh1] = RSRR;
-      g_bufferFSRRCh1[g_inCh1] = FSRR;
-      g_inCh1++;
+      g_bufferFTW0Ch1.push(FTW0);
+      g_bufferFTW1Ch1.push(FTW1);
+      g_bufferRDWCh1.push(RDW);
+      g_bufferFDWCh1.push(FDW);
+      g_bufferRSRRCh1.push(RSRR);
+      g_bufferFSRRCh1.push(FSRR);
       break;
     case c_Ch2:
-      g_bufferFTW0Ch2[g_inCh2] = FTW0;
-      g_bufferFTW1Ch2[g_inCh2] = FTW1;
-      g_bufferRDWCh2[g_inCh2]  = RDW;
-      g_bufferFDWCh2[g_inCh2]  = FDW;
-      g_bufferRSRRCh2[g_inCh2] = RSRR;
-      g_bufferFSRRCh2[g_inCh2] = FSRR;
-      g_inCh2++;
+      g_bufferFTW0Ch2.push(FTW0);
+      g_bufferFTW1Ch2.push(FTW1);
+      g_bufferRDWCh2.push(RDW);
+      g_bufferFDWCh2.push(FDW);
+      g_bufferRSRRCh2.push(RSRR);
+      g_bufferFSRRCh2.push(FSRR);
       break;
     case c_Ch3:
-      g_bufferFTW0Ch3[g_inCh3] = FTW0;
-      g_bufferFTW1Ch3[g_inCh3] = FTW1;
-      g_bufferRDWCh3[g_inCh3]  = RDW;
-      g_bufferFDWCh3[g_inCh3]  = FDW;
-      g_bufferRSRRCh3[g_inCh3] = RSRR;
-      g_bufferFSRRCh3[g_inCh3] = FSRR;
-      g_inCh3++;
+      g_bufferFTW0Ch3.push(FTW0);
+      g_bufferFTW1Ch3.push(FTW1);
+      g_bufferRDWCh3.push(RDW);
+      g_bufferFDWCh3.push(FDW);
+      g_bufferRSRRCh3.push(RSRR);
+      g_bufferFSRRCh3.push(FSRR);
       break;
   }
 
@@ -639,35 +631,33 @@ void initDigitalPins(){
 /**
  * Initialize DUC tuning word buffers (to 0).
  */
-void initFTWBuffers(){
+void resetFTWBuffers(){
 
-  // zero buffer content
-  for (unsigned int i = 0; i < c_maxSize; i++){
-    g_bufferFTW0Ch0[i] = 0;
-    g_bufferFTW1Ch0[i] = 0;
-    g_bufferFTW0Ch1[i] = 0;
-    g_bufferFTW1Ch1[i] = 0;
-    g_bufferFTW0Ch2[i] = 0;
-    g_bufferFTW1Ch2[i] = 0;
-    g_bufferFTW0Ch3[i] = 0;
-    g_bufferFTW1Ch3[i] = 0;
-    g_bufferRDWCh0[i]  = 0;
-    g_bufferRDWCh1[i]  = 0;
-    g_bufferRDWCh2[i]  = 0;
-    g_bufferRDWCh3[i]  = 0; 
-    g_bufferFDWCh0[i]  = 0;
-    g_bufferFDWCh1[i]  = 0;
-    g_bufferFDWCh2[i]  = 0;
-    g_bufferFDWCh3[i]  = 0;
-    g_bufferRSRRCh0[i] = 0;
-    g_bufferRSRRCh1[i] = 0;
-    g_bufferRSRRCh2[i] = 0;
-    g_bufferRSRRCh3[i] = 0;
-    g_bufferFSRRCh0[i] = 0;
-    g_bufferFSRRCh1[i] = 0;
-    g_bufferFSRRCh2[i] = 0;
-    g_bufferFSRRCh3[i] = 0;
-  }
+  // reset buffers to their initial state
+  g_bufferFTW0Ch0.clear();
+  g_bufferFTW1Ch0.clear();
+  g_bufferFTW0Ch1.clear();
+  g_bufferFTW1Ch1.clear();
+  g_bufferFTW0Ch2.clear();
+  g_bufferFTW1Ch2.clear();
+  g_bufferFTW0Ch3.clear();
+  g_bufferFTW1Ch3.clear();
+  g_bufferRDWCh0.clear();
+  g_bufferRDWCh1.clear();
+  g_bufferRDWCh2.clear();
+  g_bufferRDWCh3.clear();
+  g_bufferFDWCh0.clear();
+  g_bufferFDWCh1.clear();
+  g_bufferFDWCh2.clear();
+  g_bufferFDWCh3.clear();
+  g_bufferRSRRCh0.clear();
+  g_bufferRSRRCh1.clear();
+  g_bufferRSRRCh2.clear();
+  g_bufferRSRRCh3.clear();
+  g_bufferFSRRCh0.clear();
+  g_bufferFSRRCh1.clear();
+  g_bufferFSRRCh2.clear();
+  g_bufferFSRRCh3.clear();
 
 }
 
@@ -687,15 +677,13 @@ void softResetBoard(){
   Serial.println(c_softRMsg);
   
   // reset state variables
-  g_startCOM  = true;
+  g_endCOM  = true;
   g_byteCount = 0;
-    
-  // reset indices
-  resetInputIndices();
-  resetOutputIndices();
+  g_numIn  = 0;
+  g_numOut = 0;
 
   // reset FTW buffers
-  initFTWBuffers();
+  resetFTWBuffers();
 
   // activate interrupts
   activateISR();
@@ -736,9 +724,6 @@ void updateDUC(){
   // deactivate interrupts
   deactivateISR();
 
-  // re-initialize memory indices
-  if (g_numOut > g_numIn) resetOutputIndices();
-
   // debug mode
   if (g_debug){
     char str[20];
@@ -747,8 +732,8 @@ void updateDUC(){
   }
 
   // activate channel operation modes (updated channels only)
-  activateChSTM(g_bufferSingleToneMode[g_numOut]);
-  activateChLSM(g_bufferLinearSweepMode[g_numOut]);
+  activateChSTM(g_bufferSingleToneMode.shift());
+  activateChLSM(g_bufferLinearSweepMode.shift());
 
   // transfer new configurations to DUC channels
   updateCh0();
@@ -880,25 +865,34 @@ void deactivateISR(){
  */
 void updateCh0(){
 
-  if (bitRead(g_bufferSingleToneMode[g_numOut], 4) == 1){
-    spiTransferChST(0, g_bufferFTW0Ch0[g_outCh0]);
+  if (bitRead(g_bufferSingleToneMode.shift(), 4) == 1){
+
+    unsigned int FTW0 = g_bufferFTW0Ch0.shift();
+    spiTransferChST(0, FTW0);
+
     if (g_debug){
       Serial.print(F(" . Channel 0: "));
       Serial.println(c_STModMsg);
-      printSingleTone(g_bufferFTW0Ch0[g_outCh0]);
+      printSingleTone(FTW0);
     }
-    g_outCh0++;
+
   }
-  else if(bitRead(g_bufferLinearSweepMode[g_numOut], 4) == 1){
-    spiTransferChLS(0, g_bufferFTW0Ch0[g_outCh0], g_bufferFTW1Ch0[g_outCh0], g_bufferRDWCh0[g_outCh0],
-                       g_bufferFDWCh0[g_outCh0],  g_bufferRSRRCh0[g_outCh0], g_bufferFSRRCh0[g_outCh0]);
+  else if(bitRead(g_bufferLinearSweepMode.shift(), 4) == 1){
+
+    unsigned int FTW0 = g_bufferFTW0Ch0.shift();
+    unsigned int FTW1 = g_bufferFTW1Ch0.shift();
+    unsigned int RDW  = g_bufferRDWCh0.shift();
+    unsigned int FDW  = g_bufferFDWCh0.shift();
+    byte RSRR = g_bufferRSRRCh0.shift();
+    byte FSRR = g_bufferFSRRCh0.shift();
+    spiTransferChLS(0, FTW0, FTW1, RDW, FDW, RSRR, FSRR);
+
     if (g_debug){
       Serial.print(F(" . Channel 0: "));
       Serial.println(c_LSModMsg);
-      printLinearSweep(g_bufferFTW0Ch0[g_outCh0], g_bufferFTW1Ch0[g_outCh0], g_bufferRDWCh0[g_outCh0],
-                       g_bufferFDWCh0[g_outCh0],  g_bufferRSRRCh0[g_outCh0], g_bufferFSRRCh0[g_outCh0]);
+      printLinearSweep(FTW0, FTW1, RDW, FDW, RSRR, FSRR);
     }
-    g_outCh0++;
+
   }
 
 }
@@ -909,25 +903,34 @@ void updateCh0(){
  */
 void updateCh1(){
 
-  if (bitRead(g_bufferSingleToneMode[g_numOut], 5) == 1){
-    spiTransferChST(1, g_bufferFTW0Ch1[g_outCh1]);
+  if (bitRead(g_bufferSingleToneMode.shift(), 5) == 1){
+
+    unsigned int FTW0 = g_bufferFTW0Ch1.shift();
+    spiTransferChST(1, FTW0);
+
     if (g_debug){
       Serial.print(F(" . Channel 1: "));
       Serial.println(c_STModMsg);
-      printSingleTone(g_bufferFTW0Ch1[g_outCh1]);
+      printSingleTone(FTW0);
     }
-    g_outCh1++;
+
   }
-  else if(bitRead(g_bufferLinearSweepMode[g_numOut], 5) == 1){
-    spiTransferChLS(1, g_bufferFTW0Ch1[g_outCh1], g_bufferFTW1Ch1[g_outCh1], g_bufferRDWCh1[g_outCh1],
-                       g_bufferFDWCh1[g_outCh1],  g_bufferRSRRCh1[g_outCh1], g_bufferFSRRCh1[g_outCh1]);
+  else if(bitRead(g_bufferLinearSweepMode.shift(), 5) == 1){
+
+    unsigned int FTW0 = g_bufferFTW0Ch1.shift();
+    unsigned int FTW1 = g_bufferFTW1Ch1.shift();
+    unsigned int RDW  = g_bufferRDWCh1.shift();
+    unsigned int FDW  = g_bufferFDWCh1.shift();
+    byte RSRR = g_bufferRSRRCh1.shift();
+    byte FSRR = g_bufferFSRRCh1.shift();
+    spiTransferChLS(1, FTW0, FTW1, RDW, FDW, RSRR, FSRR);
+
     if (g_debug){
       Serial.print(F(" . Channel 1: "));
       Serial.println(c_LSModMsg);
-      printLinearSweep(g_bufferFTW0Ch1[g_outCh1], g_bufferFTW1Ch1[g_outCh1], g_bufferRDWCh1[g_outCh1],
-                       g_bufferFDWCh1[g_outCh1],  g_bufferRSRRCh1[g_outCh1], g_bufferFSRRCh1[g_outCh1]);
+      printLinearSweep(FTW0, FTW1, RDW, FDW, RSRR, FSRR);
     }
-    g_outCh1++;
+
   }
 
 }
@@ -938,25 +941,34 @@ void updateCh1(){
  */
 void updateCh2(){
 
-  if (bitRead(g_bufferSingleToneMode[g_numOut], 6) == 1){
-    spiTransferChST(2, g_bufferFTW0Ch2[g_outCh2]);
+  if (bitRead(g_bufferSingleToneMode.shift(), 6) == 1){
+
+    unsigned int FTW0 = g_bufferFTW0Ch2.shift();
+    spiTransferChST(2, FTW0);
+
     if (g_debug){
       Serial.print(F(" . Channel 2: "));
       Serial.println(c_STModMsg);
-      printSingleTone(g_bufferFTW0Ch2[g_outCh2]);
+      printSingleTone(FTW0);
     }
-    g_outCh2++;
+
   }
-  else if(bitRead(g_bufferLinearSweepMode[g_numOut], 6) == 1){
-    spiTransferChLS(2, g_bufferFTW0Ch2[g_outCh2], g_bufferFTW1Ch2[g_outCh2], g_bufferRDWCh2[g_outCh2],
-                    g_bufferFDWCh2[g_outCh2], g_bufferRSRRCh2[g_outCh2], g_bufferFSRRCh2[g_outCh2]);
+  else if(bitRead(g_bufferLinearSweepMode.shift(), 6) == 1){
+
+    unsigned int FTW0 = g_bufferFTW0Ch2.shift();
+    unsigned int FTW1 = g_bufferFTW1Ch2.shift();
+    unsigned int RDW  = g_bufferRDWCh2.shift();
+    unsigned int FDW  = g_bufferFDWCh2.shift();
+    byte RSRR = g_bufferRSRRCh2.shift();
+    byte FSRR = g_bufferFSRRCh2.shift();
+    spiTransferChLS(2, FTW0, FTW1, RDW, FDW, RSRR, FSRR);
+
     if (g_debug){
       Serial.print(F(" . Channel 2: "));
       Serial.println(c_LSModMsg);
-      printLinearSweep(g_bufferFTW0Ch2[g_outCh2], g_bufferFTW1Ch2[g_outCh2], g_bufferRDWCh2[g_outCh2],
-                       g_bufferFDWCh2[g_outCh2],  g_bufferRSRRCh2[g_outCh2], g_bufferFSRRCh2[g_outCh2]);
+      printLinearSweep(FTW0, FTW1, RDW, FDW, RSRR, FSRR);
     }
-    g_outCh2++;
+
   }
 
 }
@@ -967,25 +979,34 @@ void updateCh2(){
  */
 void updateCh3(){
 
-  if (bitRead(g_bufferSingleToneMode[g_numOut], 7) == 1){
-    spiTransferChST(3, g_bufferFTW0Ch3[g_outCh3]);
+  if (bitRead(g_bufferSingleToneMode.shift(), 7) == 1){
+
+    unsigned int FTW0 = g_bufferFTW0Ch3.shift();
+    spiTransferChST(3, FTW0);
+
     if (g_debug){
       Serial.print(F(" . Channel 3: "));
       Serial.println(c_STModMsg);
-      printSingleTone(g_bufferFTW0Ch3[g_outCh3]);
+      printSingleTone(FTW0);
     }
-    g_outCh3++;
+
   }
-  else if(bitRead(g_bufferLinearSweepMode[g_numOut], 7) == 1){
-    spiTransferChLS(3, g_bufferFTW0Ch3[g_outCh3], g_bufferFTW1Ch3[g_outCh3], g_bufferRDWCh3[g_outCh3],
-                    g_bufferFDWCh3[g_outCh3], g_bufferRSRRCh3[g_outCh3], g_bufferFSRRCh3[g_outCh3]);
+  else if(bitRead(g_bufferLinearSweepMode.shift(), 7) == 1){
+
+    unsigned int FTW0 = g_bufferFTW0Ch3.shift();
+    unsigned int FTW1 = g_bufferFTW1Ch3.shift();
+    unsigned int RDW  = g_bufferRDWCh3.shift();
+    unsigned int FDW  = g_bufferFDWCh3.shift();
+    byte RSRR = g_bufferRSRRCh3.shift();
+    byte FSRR = g_bufferFSRRCh3.shift();
+    spiTransferChLS(3, FTW0, FTW1, RDW, FDW, RSRR, FSRR);
+
     if (g_debug){
       Serial.print(F(" . Channel 3: "));
       Serial.println(c_LSModMsg);
-      printLinearSweep(g_bufferFTW0Ch3[g_outCh3], g_bufferFTW1Ch3[g_outCh3], g_bufferRDWCh3[g_outCh3],
-                       g_bufferFDWCh3[g_outCh3],  g_bufferRSRRCh3[g_outCh3], g_bufferFSRRCh3[g_outCh3]);
+      printLinearSweep(FTW0, FTW1, RDW, FDW, RSRR, FSRR);
     }
-    g_outCh3++;
+
   }
 
 }
@@ -1312,44 +1333,6 @@ void ioUpdate(){
 }
 
 
-/**
- * Check if k-th bit in byte b is set.
- * @param[in] b input byte to check
- * @param[in] p checked position
- * @returns true if p-th bit is set, false otherwise
- */
-bool isBitSet(byte b, byte p){
-
-  bool isSet = (b >> (p - 1)) & 1;
-
-  return isSet;
-
-}
-
-
-/**
- * Reset input memory indices.
- */
-void resetInputIndices(){
-  g_numIn = 0;
-  g_inCh0 = 0;
-  g_inCh1 = 0;
-  g_inCh2 = 0;
-  g_inCh3 = 0;
-}
-
-
-/**
- * Reset output memory indices.
- */
-void resetOutputIndices(){
-  g_numOut = 0;
-  g_outCh0 = 0;
-  g_outCh1 = 0;
-  g_outCh2 = 0;
-  g_outCh3 = 0;
-}
-
 
 
 // Print functions
@@ -1361,10 +1344,13 @@ void printSerialCOM(){
   // get current time
   g_currenTime = micros();
 
+  // wait for serial monitor to be opened
+  if (g_debug) delay(2000);
+
   // info  
   float elapsed = (g_currenTime - g_starTime) * 0.001;
-  Serial.print(F("\n* PC >>> board serial communication complete!\n"));
-  Serial.print(F("  Received: "));
+  Serial.print(F("\n * PC >>> MCU serial communication complete!\n"));
+  Serial.print(F("   Received: "));
   Serial.print(g_byteCount);
   Serial.print(F(" B, "));
   Serial.print(elapsed);
@@ -1372,7 +1358,7 @@ void printSerialCOM(){
   float rate = (float) g_byteCount / elapsed;
   Serial.print(F(", rate = "));
   Serial.print(rate);
-  Serial.println(F(" kB/s\n"));
+  Serial.println(F(" kB/s\n"));  
 
 }
 
@@ -1406,7 +1392,7 @@ void printUint(unsigned int UI){
  */
 void printSingleTone(unsigned int FTW){
 
-  char str[20];
+  char str[60];
 
   Serial.print(F("   FTW:            "));
   printUint(FTW);
@@ -1422,7 +1408,7 @@ void printSingleTone(unsigned int FTW){
  */
 void printLinearSweep(unsigned int FTW0, unsigned int FTW1, unsigned int RDW, unsigned int FDW, byte RSRR, byte FSRR){
 
-  char  str[30];
+  char  str[60];
   float df;
   float dt;
 
