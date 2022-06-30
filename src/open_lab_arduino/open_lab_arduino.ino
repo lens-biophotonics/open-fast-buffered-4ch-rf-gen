@@ -8,6 +8,7 @@
  */
 #include <Arduino.h>
 #include <avr/pgmspace.h>
+#include <CircularBuffer.h>
 
 
 /** 
@@ -232,7 +233,7 @@ void loop(){
  */
 void readSerialPort(){
 
-  if (Serial.available() > 0){
+  if (Serial.available()){
 
     // get input instruction string
     char inChar = (char)Serial.read();

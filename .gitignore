@@ -3,7 +3,6 @@ platformio.ini
 
 # ignored folders
 include
-lib
 test
 .ipynb_checkpoints
 .pio
