@@ -23,7 +23,12 @@
 // Global variables
 
 // debugging mode
-bool g_debug = true;
+bool g_debug = false;
+
+// input timing mode
+bool g_timeit = false;
+unsigned long g_strTime = 0;
+unsigned int g_strIn = 1;
 
 // PC serial communication
 bool g_clientCXN = false;       // USB serial connection established
@@ -184,6 +189,9 @@ char c_LSModMsg[] PROGMEM = "     Linear Sweep mode";
  */
 void setup(){
 
+  // disable debug serial prints for input strings timing
+  if (g_timeit) g_debug = false;
+
   // initialize digital pins
   initDigitalPins();
 
@@ -235,10 +243,11 @@ void readSerialPort(){
     char inChar = (char)Serial.read();
     g_byteCount++;
 
-    Serial.println(inChar);
-
     // start communication timer
     if (g_endCOM){
+
+      // input timing mode
+      if (g_timeit) delay(1000);
 
       // deactivate interrupts
       // deactivateISR();
@@ -246,6 +255,9 @@ void readSerialPort(){
       // serial communication has started
       g_endCOM = false;
       g_starTime = micros();
+      
+      // input timing mode
+      if (g_timeit) g_strTime = g_starTime;
     }
 
     // add char to string as long as it is not a newline
@@ -254,7 +266,19 @@ void readSerialPort(){
 
       // push incoming string into FIFO string buffer
       if (!g_inString.equals("END")){
-        if (!g_inStringBuffer.isFull()) g_inStringBuffer.push(g_inString);
+        if (!g_inStringBuffer.isFull()){
+          g_inStringBuffer.push(g_inString);
+
+          // input timing mode
+          if (g_timeit){
+            char str[50];
+            sprintf(str, "\n * String %d serial time: %luus", g_strIn, micros() - g_strTime);
+            Serial.println(str);
+            g_strIn++;
+            g_strTime = micros();
+          }
+
+        }
         else Serial.println(c_inStrMsg);
       }
 
@@ -296,6 +320,9 @@ void decodeDataString(){
       // wait for serial prints when debugging
       if (g_debug) delay(1000);
 
+      // input timing mode
+      if (g_timeit) g_strTime = micros();
+
       // "pop" data string from input buffer
       g_outString = g_inStringBuffer.shift();
   
@@ -310,6 +337,13 @@ void decodeDataString(){
 
       // increase overall input counter
       g_numIn++;
+
+      // input timing mode
+      if (g_timeit){
+        char str[50];
+        sprintf(str, " * String %d decode time: %luus\n", g_numIn, micros() - g_strTime);
+        Serial.println(str);
+      }
 
     }
 

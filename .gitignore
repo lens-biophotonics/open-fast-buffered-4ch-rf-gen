@@ -1,5 +1,7 @@
 # ignored files
 platformio.ini
+input_timing.ipynb
+
 
 # ignored folders
 include
