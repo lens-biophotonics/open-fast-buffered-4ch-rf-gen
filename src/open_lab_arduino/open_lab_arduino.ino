@@ -270,13 +270,7 @@ void readSerialPort(){
           g_inStringBuffer.push(g_inString);
 
           // input timing mode
-          if (g_timeit){
-            char str[50];
-            sprintf(str, "\n * String %d serial time: %luus", g_strIn, micros() - g_strTime);
-            Serial.println(str);
-            g_strIn++;
-            g_strTime = micros();
-          }
+          if (g_timeit) printReadTime();
 
         }
         else Serial.println(c_inStrMsg);
@@ -342,11 +336,7 @@ void decodeDataString(){
       g_numIn++;
 
       // input timing mode
-      if (g_timeit){
-        char str[50];
-        sprintf(str, " * String %d decode time: %luus\n", g_numIn, micros() - g_strTime);
-        Serial.println(str);
-      }
+      if (g_timeit) printDecodeTime();
 
     }
 
@@ -1412,6 +1402,28 @@ void printByte(byte B){
     if(i % 4 == 0) Serial.print(" ");
   } 
   Serial.println();
+}
+
+
+/**
+ * Print data string read time to serial monitor.
+ */
+void printReadTime(){
+  char str[50];
+  sprintf(str, "\n * String %d serial time: %luus", g_strIn, micros() - g_strTime);
+  Serial.println(str);
+  g_strIn++;
+  g_strTime = micros();
+}
+
+
+/**
+ * Print data string decoding time to serial monitor.
+ */
+void printDecodeTime(){
+  char str[50];
+  sprintf(str, " * String %d decode time: %luus\n", g_numIn, micros() - g_strTime);
+  Serial.println(str);
 }
 
 
