@@ -197,7 +197,7 @@ void setup(){
 
   // reset DUC
   // (master reset signal and DUC initialization)
-  // hardResetDUC();
+  hardResetDUC();
 
   // initialize serial monitor (max baud rate)
   Serial.begin(115200);
@@ -209,7 +209,7 @@ void setup(){
   }
 
   // activate interrupt service routines
-  // activateISR();
+  activateISR();
 
 }
 
@@ -250,7 +250,7 @@ void readSerialPort(){
       if (g_timeit) delay(1000);
 
       // deactivate interrupts
-      // deactivateISR();
+      deactivateISR();
 
       // serial communication has started
       g_endCOM = false;
@@ -289,7 +289,7 @@ void readSerialPort(){
         printSerialCOM();
 
         // activate interrupts
-        // activateISR();
+        activateISR();
 
         // a new serial communication will start
         g_endCOM = true;
@@ -313,6 +313,9 @@ void decodeDataString(){
   
   // if not communicating
   if (g_endCOM == true){
+
+    // deactivate interrupts
+    deactivateISR();
 
     // strings available for decoding
     if (!g_inStringBuffer.isEmpty()){
@@ -346,6 +349,9 @@ void decodeDataString(){
       }
 
     }
+
+    // activate interrupts
+    activateISR();
 
   }
 
