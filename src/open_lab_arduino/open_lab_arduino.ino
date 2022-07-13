@@ -16,8 +16,8 @@
  * Teensy 4.1 Custom Serial I/O : GPIO6_DR pin mapping (from msb to lsb) 
  * 
  * 27 26 39 38   21 20 23 22   16 17 41 40   15 14 18 19   X X 25 24   X X X X   X X X X   0 1 X X
-                                                                          SCLK  |MOSI PINS|
- *                                                                        
+                                       SCLK  |MOSI PINS|
+ *
  */
 
 
