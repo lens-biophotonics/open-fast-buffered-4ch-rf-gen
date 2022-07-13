@@ -103,6 +103,7 @@ const unsigned int c_Ch1   = 1;
 const unsigned int c_Ch2   = 2;
 const unsigned int c_Ch3   = 3;
 const unsigned int c_ChAll = 4;
+byte g_sweepCh = 0b00000000;
 
 
 // AD9959 register addresses
@@ -743,6 +744,9 @@ void hardResetDUC(){
   // quad-SPI is not active
   g_QuadSPIActive = false;
 
+  // all channels in single-tone mode
+  g_sweepCh = 0b00000000;
+
   // set Function Register 1 (PLL x20, Vco gain HIGH)
   setPLLDivider();
 
@@ -768,16 +772,19 @@ void updateDUC(){
   }
 
   // activate channel operation modes (updated channels only)
-  byte singleToneByte = g_bufferSingleToneMode.shift();
-  byte linearSweepByte = g_bufferLinearSweepMode.shift();
-  if (singleToneByte) activateChSTM(singleToneByte);
-  if (linearSweepByte) activateChLSM(linearSweepByte);
+  byte stMode = g_bufferSingleToneMode.shift();
+  byte lsMode = g_bufferLinearSweepMode.shift();
+  if (stMode) activateChSTM(stMode);
+  if (lsMode) activateChLSM(lsMode);
 
   // transfer new configurations to DUC channels
-  updateCh0(singleToneByte, linearSweepByte);
-  updateCh1(singleToneByte, linearSweepByte);
-  updateCh2(singleToneByte, linearSweepByte);
-  updateCh3(singleToneByte, linearSweepByte);
+  updateCh0(stMode, lsMode);
+  updateCh1(stMode, lsMode);
+  updateCh2(stMode, lsMode);
+  updateCh3(stMode, lsMode);
+
+  // update linear sweep channels
+  g_sweepCh = (g_sweepCh ^ stMode) & lsMode;
 
   // increase overall output counter
   g_numOut++;
@@ -1154,6 +1161,9 @@ void spiTransferChLS(byte ch, unsigned int FTW0, unsigned int FTW1,
  */
 void activateChSTM(byte chSelMask){
 
+  // compare to past state (ignore unmodified channels)
+  chSelMask = (~g_sweepCh ^ chSelMask) & chSelMask;
+
   // Channel Function Register bytes
   byte bufferCFR[c_CFRSize];      
   bufferCFR[0] = c_CSR;
@@ -1183,6 +1193,9 @@ void activateChSTM(byte chSelMask){
  * @param[in] chSelMask DUC channel selection mask
  */
 void activateChLSM(byte chSelMask){
+
+  // compare to past state (ignore unmodified channels)
+  chSelMask = (g_sweepCh ^ chSelMask) & chSelMask;
 
   // Channel Function Register bytes
   byte bufferCFR[c_CFRSize];
