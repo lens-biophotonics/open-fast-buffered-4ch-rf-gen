@@ -9,6 +9,7 @@
 #include <Arduino.h>
 #include <avr/pgmspace.h>
 #include <CircularBuffer.h>
+#include <SPI.h>
 
 
 /** 
@@ -21,6 +22,10 @@
 
 
 // Global variables
+
+// SPI libraries to test (new connections >>> MOSI: pin 11; MISO: pin 12; SCLK0: pin 13)
+bool c_stdSPI = true;
+SPISettings settings(20000000, MSBFIRST, SPI_MODE0);
 
 // debugging mode
 bool g_debug = false;
@@ -196,6 +201,9 @@ void setup(){
 
   // initialize digital pins
   initDigitalPins();
+
+  // initialize standard SPI
+  if (c_stdSPI) SPI.begin();
 
   // reset DUC
   // (master reset signal and DUC initialization)
@@ -602,6 +610,9 @@ void setPLLDivider(){
                                 // FR1[11:10]: RU/RD bits;
                                 // FR1[9:8]:   modulation level    (=00 is required in linear sweep mode)
   bufferFR1[3] = 0b00100000;    // FR1[5] = 1  OUT SYNC_CLK pin disabled
+  
+  // begin SPI transaction when using the standard library
+  if (c_stdSPI) SPI.beginTransaction(settings);
 
   // select all DDS channels
   selectDDSChannels(c_ChAll);
@@ -611,6 +622,9 @@ void setPLLDivider(){
   if (g_QuadSPIActive) quadSPIBufferTransfer(bufferFR1, c_FR1Size);
   else singleSPIBufferTransfer(bufferFR1, c_FR1Size);
   digitalWriteFast(c_ChipSel, HIGH);
+
+  // end SPI transaction when using the standard library   
+  if (c_stdSPI) SPI.endTransaction();
 
   // issue an I/O update pulse: FR1 register is set
   ioUpdate();
@@ -642,9 +656,9 @@ void initDigitalPins(){
   // set I/O update pin as output, set it LOW
   pinMode(c_IOUpdate, OUTPUT);
 
-  // set chip select pin as output, set it LOW
+  // set chip select pin as output, set it HIGH
   pinMode(c_ChipSel, OUTPUT);
-  digitalWriteFast(c_ChipSel, LOW);
+  digitalWriteFast(c_ChipSel, HIGH);
 
   // set SPI communication pins
   for (byte i = 0; i < 5; i++){
@@ -814,6 +828,9 @@ void initQuadSPI(){
     bufferInitSPI[0] = c_CSR;
     bufferInitSPI[1] = 0b11110110;
 
+    // begin SPI transaction when using the standard library
+    if (c_stdSPI) SPI.beginTransaction(settings);
+
     // select slave device
     digitalWriteFast(c_ChipSel, LOW);
 
@@ -822,6 +839,9 @@ void initQuadSPI(){
 
     // de-select DUC
     digitalWriteFast(c_ChipSel, HIGH);
+
+    // end SPI transaction when using the standard library   
+    if (c_stdSPI) SPI.endTransaction();
 
     // issue an I/O update for changing the serial mode bits
     ioUpdate();
@@ -1077,15 +1097,24 @@ void spiTransferChST(byte ch, unsigned int FTW){
   bufferFTWST[2] = (byte)((FTW & 0x00FF0000) >> 16);  // second-high byte
   bufferFTWST[3] = (byte)((FTW & 0x0000FF00) >> 8);   // second-low byte
   bufferFTWST[4] = (byte)( FTW & 0x000000FF);         // lower byte
+  
+  // begin SPI transaction when using the standard library
+  if (c_stdSPI) SPI.beginTransaction(settings);
 
   // select DDS channel
   selectDDSChannels(ch);
+
+  // begin SPI transaction when using the standard library
+  if (c_stdSPI) SPI.beginTransaction(settings);
 
   // transfer data to DDS (custom quad-SPI)
   digitalWriteFast(c_ChipSel, LOW);
   if (g_QuadSPIActive) quadSPIBufferTransfer(bufferFTWST, sizeST);
   else singleSPIBufferTransfer(bufferFTWST, sizeST);
   digitalWriteFast(c_ChipSel, HIGH);
+  
+  // end SPI transaction when using the standard library   
+  if (c_stdSPI) SPI.endTransaction();
 
 }
 
@@ -1139,6 +1168,9 @@ void spiTransferChLS(byte ch, unsigned int FTW0, unsigned int FTW1,
   bufferFTWLS[20] = (byte)((FDW & 0x00FF0000) >> 16);     // second-high byte
   bufferFTWLS[21] = (byte)((FDW & 0x0000FF00) >> 8);      // second-low byte
   bufferFTWLS[22] = (byte)( FDW & 0x000000FF);            // lower byte
+  
+  // begin SPI transaction when using the standard library
+  if (c_stdSPI) SPI.beginTransaction(settings);
 
   // select DDS channel
   selectDDSChannels(ch);
@@ -1148,6 +1180,9 @@ void spiTransferChLS(byte ch, unsigned int FTW0, unsigned int FTW1,
   if (g_QuadSPIActive) quadSPIBufferTransfer(bufferFTWLS, sizeLS);
   else singleSPIBufferTransfer(bufferFTWLS, sizeLS);
   digitalWriteFast(c_ChipSel, HIGH);
+
+  // end SPI transaction when using the standard library   
+  if (c_stdSPI) SPI.endTransaction();
 
 }
 
@@ -1172,6 +1207,9 @@ void activateChSTM(byte chSelMask){
   bufferCFR[3] = 0x02;
   bufferCFR[4] = 0x03;
   bufferCFR[5] = 0x00;
+  
+  // begin SPI transaction when using the standard library
+  if (c_stdSPI) SPI.beginTransaction(settings);
 
   // transfer word to DDS via quad-SPI
   digitalWriteFast(c_ChipSel, LOW);  
@@ -1181,6 +1219,9 @@ void activateChSTM(byte chSelMask){
   }
   else singleSPIBufferTransfer(bufferCFR, c_CFRSize);
   digitalWriteFast(c_ChipSel, HIGH);
+
+  // end SPI transaction when using the standard library   
+  if (c_stdSPI) SPI.endTransaction();
 
   // issue an I/O update pulse: CFR is set
   ioUpdate();
@@ -1211,6 +1252,9 @@ void activateChLSM(byte chSelMask){
                                 // CFR[10]:    0
                                 // CFR[9:8]:   DAC full-scale         (=11 full-scale enabled)
   bufferCFR[5] = 0b00000000;    // CFR[7:0]    (DEFAULT VALUE: 0x02)
+  
+  // begin SPI transaction when using the standard library
+  if (c_stdSPI) SPI.beginTransaction(settings);
 
   // transfer word to DDS via quad-SPI
   digitalWriteFast(c_ChipSel, LOW);
@@ -1220,6 +1264,9 @@ void activateChLSM(byte chSelMask){
   }
   else singleSPIBufferTransfer(bufferCFR, c_CFRSize);
   digitalWriteFast(c_ChipSel, HIGH);
+
+  // end SPI transaction when using the standard library   
+  if (c_stdSPI) SPI.endTransaction();
 
   // issue an I/O update pulse: CFR is set
   ioUpdate();
@@ -1315,9 +1362,17 @@ void quadSPIByteTransfer(byte data){
  * @param[in] buffer_size buffer size in bytes
  */
 void singleSPIBufferTransfer(byte buffer[], unsigned int buffer_size){
+
   // loop over buffer byte elements
-  for (unsigned int b = 0; b < buffer_size; b++) singleSPIByteTransfer(buffer[b]);
-  GPIO6_DR = c_SafeClearGPIO6Bit5(GPIO6_DR);
+  // standard SPI library
+  if (c_stdSPI){
+    for (unsigned int b = 0; b < buffer_size; b++) SPI.transfer(buffer[b]);
+  }
+  // custom
+  else{
+    for (unsigned int b = 0; b < buffer_size; b++) singleSPIByteTransfer(buffer[b]);
+    GPIO6_DR = c_SafeClearGPIO6Bit5(GPIO6_DR);
+  }
 }
 
 
