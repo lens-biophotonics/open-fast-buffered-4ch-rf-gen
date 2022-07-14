@@ -571,22 +571,6 @@ void storeLinearSweep(unsigned int ch, unsigned int FTW0, unsigned int FTW1,
 
 // DUC initialization functions
 /**
- * AD9959 initialization function
- * . PLL initialization (FR1 register)
- * . quad-SPI initialization
- */
-void initDUC(){
-
-  // set Function Register 1 (PLL x20, Vco gain HIGH)
-  setPLLDivider(); 
-
-  // initialize quad-SPI
-  initSingleSPI();
- 
-}
-
-
-/**
  * Program Function Register 1: set PLL factor to x20 (SYS_CLK = 20 * REF_CLK)
  */
 void setPLLDivider(){
