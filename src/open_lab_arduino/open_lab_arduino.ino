@@ -596,7 +596,7 @@ void setPLLDivider(){
   bufferFR1[3] = 0b00100000;    // FR1[5] = 1  OUT SYNC_CLK pin disabled
   
   // begin SPI transaction when using the standard library
-  if (c_stdSPI) SPI.beginTransaction(settings);
+  if (c_stdSPI && !g_QuadSPIActive) SPI.beginTransaction(settings);
 
   // select all DDS channels
   selectDDSChannels(c_ChAll);
@@ -608,7 +608,7 @@ void setPLLDivider(){
   digitalWriteFast(c_ChipSel, HIGH);
 
   // end SPI transaction when using the standard library   
-  if (c_stdSPI) SPI.endTransaction();
+  if (c_stdSPI && !g_QuadSPIActive) SPI.endTransaction();
 
   // issue an I/O update pulse: FR1 register is set
   ioUpdate();
@@ -1083,15 +1083,12 @@ void spiTransferChST(byte ch, unsigned int FTW){
   bufferFTWST[2] = (byte)((FTW & 0x00FF0000) >> 16);  // second-high byte
   bufferFTWST[3] = (byte)((FTW & 0x0000FF00) >> 8);   // second-low byte
   bufferFTWST[4] = (byte)( FTW & 0x000000FF);         // lower byte
-  
+
   // begin SPI transaction when using the standard library
-  if (c_stdSPI) SPI.beginTransaction(settings);
+  if (c_stdSPI && !g_QuadSPIActive) SPI.beginTransaction(settings);
 
   // select DDS channel
   selectDDSChannels(ch);
-
-  // begin SPI transaction when using the standard library
-  if (c_stdSPI) SPI.beginTransaction(settings);
 
   // transfer data to DDS (custom quad-SPI)
   digitalWriteFast(c_ChipSel, LOW);
@@ -1100,7 +1097,7 @@ void spiTransferChST(byte ch, unsigned int FTW){
   digitalWriteFast(c_ChipSel, HIGH);
   
   // end SPI transaction when using the standard library   
-  if (c_stdSPI) SPI.endTransaction();
+  if (c_stdSPI && !g_QuadSPIActive) SPI.endTransaction();
 
 }
 
@@ -1156,7 +1153,7 @@ void spiTransferChLS(byte ch, unsigned int FTW0, unsigned int FTW1,
   bufferFTWLS[22] = (byte)( FDW & 0x000000FF);            // lower byte
   
   // begin SPI transaction when using the standard library
-  if (c_stdSPI) SPI.beginTransaction(settings);
+  if (c_stdSPI && !g_QuadSPIActive) SPI.beginTransaction(settings);
 
   // select DDS channel
   selectDDSChannels(ch);
@@ -1168,7 +1165,7 @@ void spiTransferChLS(byte ch, unsigned int FTW0, unsigned int FTW1,
   digitalWriteFast(c_ChipSel, HIGH);
 
   // end SPI transaction when using the standard library   
-  if (c_stdSPI) SPI.endTransaction();
+  if (c_stdSPI && !g_QuadSPIActive) SPI.endTransaction();
 
 }
 
@@ -1192,7 +1189,7 @@ void activateChSTM(byte chSelMask){
   bufferCFR[5] = 0x00;
   
   // begin SPI transaction when using the standard library
-  if (c_stdSPI) SPI.beginTransaction(settings);
+  if (c_stdSPI && !g_QuadSPIActive) SPI.beginTransaction(settings);
 
   // transfer word to DDS via quad-SPI
   digitalWriteFast(c_ChipSel, LOW);  
@@ -1204,7 +1201,7 @@ void activateChSTM(byte chSelMask){
   digitalWriteFast(c_ChipSel, HIGH);
 
   // end SPI transaction when using the standard library   
-  if (c_stdSPI) SPI.endTransaction();
+  if (c_stdSPI && !g_QuadSPIActive) SPI.endTransaction();
 
   // issue an I/O update pulse: CFR is set
   ioUpdate();
@@ -1234,7 +1231,7 @@ void activateChLSM(byte chSelMask){
   bufferCFR[5] = 0b00000000;    // CFR[7:0]    (DEFAULT VALUE: 0x02)
   
   // begin SPI transaction when using the standard library
-  if (c_stdSPI) SPI.beginTransaction(settings);
+  if (c_stdSPI && !g_QuadSPIActive) SPI.beginTransaction(settings);
 
   // transfer word to DDS via quad-SPI
   digitalWriteFast(c_ChipSel, LOW);
@@ -1246,7 +1243,7 @@ void activateChLSM(byte chSelMask){
   digitalWriteFast(c_ChipSel, HIGH);
 
   // end SPI transaction when using the standard library   
-  if (c_stdSPI) SPI.endTransaction();
+  if (c_stdSPI && !g_QuadSPIActive) SPI.endTransaction();
 
   // issue an I/O update pulse: CFR is set
   ioUpdate();
