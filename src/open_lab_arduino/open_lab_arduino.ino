@@ -788,8 +788,10 @@ void updateDUC(){
   // activate channel operation modes (updated channels only)
   byte stMode = g_bufferSingleToneMode.shift();
   byte lsMode = g_bufferLinearSweepMode.shift();
-  if (stMode) activateChSTM(stMode);
-  if (lsMode) activateChLSM(lsMode);
+  byte stMask = (~g_sweepCh ^ stMode) & stMode;
+  byte lsMask = (g_sweepCh ^ lsMode) & lsMode;
+  if (stMask) activateChSTM(stMask);
+  if (lsMask) activateChLSM(lsMask);
 
   // transfer new configurations to DUC channels
   updateCh0(stMode, lsMode);
@@ -798,7 +800,7 @@ void updateDUC(){
   updateCh3(stMode, lsMode);
 
   // update linear sweep channels
-  g_sweepCh = (g_sweepCh ^ stMode) & lsMode;
+  if (stMask || lsMask) g_sweepCh = (g_sweepCh ^ stMode) | lsMode;
 
   // increase overall output counter
   g_numOut++;
@@ -1196,9 +1198,6 @@ void spiTransferChLS(byte ch, unsigned int FTW0, unsigned int FTW1,
  */
 void activateChSTM(byte chSelMask){
 
-  // compare to past state (ignore unmodified channels)
-  chSelMask = (~g_sweepCh ^ chSelMask) & chSelMask;
-
   // Channel Function Register bytes
   byte bufferCFR[c_CFRSize];      
   bufferCFR[0] = c_CSR;
@@ -1234,9 +1233,6 @@ void activateChSTM(byte chSelMask){
  * @param[in] chSelMask DUC channel selection mask
  */
 void activateChLSM(byte chSelMask){
-
-  // compare to past state (ignore unmodified channels)
-  chSelMask = (g_sweepCh ^ chSelMask) & chSelMask;
 
   // Channel Function Register bytes
   byte bufferCFR[c_CFRSize];
