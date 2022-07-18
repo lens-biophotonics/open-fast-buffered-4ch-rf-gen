@@ -22,6 +22,9 @@
 
 // Global variables
 
+// auto DDS activation (issue an I/O update pulse after each SPI communication)
+bool g_autoUpdate = false;
+
 // debugging mode
 bool g_debug = false;
 
@@ -771,6 +774,9 @@ void updateDUC(){
 
   // increase overall output counter
   g_numOut++;
+
+  // activate configuration
+  if (g_autoUpdate) ioUpdate();
 
   // activate interrupts
   activateISR();
