@@ -86,8 +86,6 @@ const byte  c_PLLDiv  = 20;
 const float c_RefClk  = 25; 
 const float c_SysClk  = c_PLLDiv * c_RefClk;  //  [MHz]   DDS SYS_CLK  = PLL factor * REF_CLK = 20 * 25 MHz = 500 MHz
 const float c_SyncClk = 0.25 * c_SysClk;      //  [MHz]   DDS SYNC_CLK = 0.25 * SYS_CLK = 125 MHz
-const byte  c_Tassert = 1;                    //  [μs]    DDS master reset and I/O update assert time 
-                                              //          (must be higher than 1/SYNC_CLK μs, i.e. 8 ns)
 
 // AD9959 bit precision
 const byte c_DDSbits = 32; 
@@ -722,7 +720,6 @@ void hardResetDUC(){
 
   // issue master reset pulse
   digitalWriteFast(c_HardReset, HIGH);
-  delayMicroseconds(c_Tassert);
   digitalWriteFast(c_HardReset, LOW);
 
   // quad-SPI is not active
@@ -1369,7 +1366,6 @@ float decodeSweepRampRate(byte SRR){
 void ioUpdate(){
 
   digitalWriteFast(c_IOUpdate, HIGH);
-  delayMicroseconds(c_Tassert);
   digitalWriteFast(c_IOUpdate, LOW);
         
 }
