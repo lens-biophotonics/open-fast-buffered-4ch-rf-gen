@@ -23,7 +23,7 @@
 // Global variables
 
 // auto DDS activation (issue an I/O update pulse after each SPI communication)
-bool g_autoUpdate = false;
+bool g_autoUpdate = true;
 
 // debugging mode
 bool g_debug = false;
@@ -723,6 +723,7 @@ void hardResetDUC(){
 
   // issue master reset pulse
   digitalWriteFast(c_HardReset, HIGH);
+  delayMicroseconds(1);
   digitalWriteFast(c_HardReset, LOW);
 
   // quad-SPI is not active
@@ -913,6 +914,7 @@ void updateCh0(byte singleToneByte, byte linearSweepByte){
       Serial.print(F(" . Channel 0: "));
       Serial.println(c_STModMsg);
       printSingleTone(FTW0);
+      delayMicroseconds(200);
     }
 
   }
@@ -930,6 +932,7 @@ void updateCh0(byte singleToneByte, byte linearSweepByte){
       Serial.print(F(" . Channel 0: "));
       Serial.println(c_LSModMsg);
       printLinearSweep(FTW0, FTW1, RDW, FDW, RSRR, FSRR);
+      delayMicroseconds(200);
     }
 
   }
@@ -951,6 +954,7 @@ void updateCh1(byte singleToneByte, byte linearSweepByte){
       Serial.print(F(" . Channel 1: "));
       Serial.println(c_STModMsg);
       printSingleTone(FTW0);
+      delayMicroseconds(200);
     }
 
   }
@@ -968,6 +972,7 @@ void updateCh1(byte singleToneByte, byte linearSweepByte){
       Serial.print(F(" . Channel 1: "));
       Serial.println(c_LSModMsg);
       printLinearSweep(FTW0, FTW1, RDW, FDW, RSRR, FSRR);
+      delayMicroseconds(200);
     }
 
   }
@@ -989,6 +994,7 @@ void updateCh2(byte singleToneByte, byte linearSweepByte){
       Serial.print(F(" . Channel 2: "));
       Serial.println(c_STModMsg);
       printSingleTone(FTW0);
+      delayMicroseconds(200);
     }
 
   }
@@ -1006,6 +1012,7 @@ void updateCh2(byte singleToneByte, byte linearSweepByte){
       Serial.print(F(" . Channel 2: "));
       Serial.println(c_LSModMsg);
       printLinearSweep(FTW0, FTW1, RDW, FDW, RSRR, FSRR);
+      delayMicroseconds(200);
     }
 
   }
@@ -1027,6 +1034,7 @@ void updateCh3(byte singleToneByte, byte linearSweepByte){
       Serial.print(F(" . Channel 3: "));
       Serial.println(c_STModMsg);
       printSingleTone(FTW0);
+      delayMicroseconds(200);
     }
 
   }
@@ -1044,6 +1052,7 @@ void updateCh3(byte singleToneByte, byte linearSweepByte){
       Serial.print(F(" . Channel 3: "));
       Serial.println(c_LSModMsg);
       printLinearSweep(FTW0, FTW1, RDW, FDW, RSRR, FSRR);
+      delayMicroseconds(200);
     }
 
   }
@@ -1372,8 +1381,9 @@ float decodeSweepRampRate(byte SRR){
 void ioUpdate(){
 
   digitalWriteFast(c_IOUpdate, HIGH);
+  delayMicroseconds(1);
   digitalWriteFast(c_IOUpdate, LOW);
-        
+
 }
 
 
