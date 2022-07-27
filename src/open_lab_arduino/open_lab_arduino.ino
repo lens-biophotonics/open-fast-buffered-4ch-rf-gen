@@ -309,7 +309,7 @@ void readSerialPort(){
 void decodeDataString(){
   
   // if not communicating
-  if (g_endCOM == true){
+  if (g_endCOM){
 
     // deactivate interrupts
     deactivateISR();
@@ -689,9 +689,6 @@ void resetFTWBuffers(){
  */
 void softResetBoard(){
   
-  // deactivate interrupts
-  deactivateISR();
-
   // print to serial monitor
   Serial.println(c_softRMsg);
   
@@ -704,9 +701,6 @@ void softResetBoard(){
   // reset FTW buffers
   resetFTWBuffers();
 
-  // activate interrupts
-  activateISR();
-
 }
 
 
@@ -714,9 +708,6 @@ void softResetBoard(){
  * DUC reset via master reset signal ("hard" reset): triggered when the c_HardResetInterrupt pin goes from low to high.
  */
 void hardResetDUC(){
-
-  // deactivate interrupts
-  deactivateISR();
 
   // print to serial monitor
   Serial.println(c_hardRMsg);
@@ -735,9 +726,6 @@ void hardResetDUC(){
   // set Function Register 1 (PLL x20, Vco gain HIGH)
   setPLLDivider();
 
-  // activate interrupts
-  activateISR();
-
 }
 
 
@@ -745,9 +733,6 @@ void hardResetDUC(){
  * Update DUC channels programming: triggered when the c_UpdateInterrupt pin goes from low to high.
  */
 void updateDUC(){
-
-  // deactivate interrupts
-  deactivateISR();
 
   // debug mode
   if (g_debug){
@@ -779,9 +764,6 @@ void updateDUC(){
   // activate configuration
   if (g_autoUpdate) ioUpdate();
 
-  // activate interrupts
-  activateISR();
-
 }
 
 
@@ -792,9 +774,6 @@ void initQuadSPI(){
 
   // only if quad-SPI is active
   if (g_QuadSPIActive == false){
-
-    // deactivate interrupts
-    deactivateISR();
 
     // print to serial monitor
     Serial.println(c_quSPIMsg);
@@ -819,9 +798,6 @@ void initQuadSPI(){
     // quad-SPI is active
     g_QuadSPIActive = true;
 
-    // activate interrupts
-    activateISR();
-
   }
 
 }
@@ -834,9 +810,6 @@ void initSingleSPI(){
 
   // only if quad-SPI is active
   if (g_QuadSPIActive){
-
-    // deactivate interrupts
-    deactivateISR();
 
     // print to serial monitor
     Serial.println(c_sgSPIMsg);
@@ -860,9 +833,6 @@ void initSingleSPI(){
 
     // quad-SPI is not active
     g_QuadSPIActive = false;
-
-    // activate interrupts
-    activateISR();
 
   }
 
