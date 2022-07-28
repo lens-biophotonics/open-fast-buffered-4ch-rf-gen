@@ -574,7 +574,7 @@ void storeLinearSweep(unsigned int ch, unsigned int FTW0, unsigned int FTW1,
 /**
  * Program Function Register 1: set PLL factor to x20 (SYS_CLK = 20 * REF_CLK)
  */
-void setPLLDivider(){
+void setPLLMultiplier(){
 
   // Function Register 1 bytes
   byte bufferFR1[c_FR1Size];
@@ -724,7 +724,7 @@ void hardResetDUC(){
   g_sweepCh = 0b00000000;
 
   // set Function Register 1 (PLL x20, Vco gain HIGH)
-  setPLLDivider();
+  setPLLMultiplier();
 
 }
 
