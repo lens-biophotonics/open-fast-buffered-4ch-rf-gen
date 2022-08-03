@@ -22,11 +22,22 @@
 
 // Global variables
 
+// AD9959 DDS (Device Under Control)
+// clock variables
+const bool c_ClkMultiplier = true;    // True: g_SysClk = c_PLLMul * c_RefClk; False: g_SysClk = c_RefClk
+const byte  c_PLLMul = 20;            // must be comprised between 4 and 20
+const float c_RefClk = 25;            // [MHz]
+float g_SysClk;
+float g_SyncClk;
+
 // auto DDS activation (issue an I/O update pulse after each SPI communication)
 bool g_autoUpdate = true;
 
 // debugging mode
 bool g_debug = false;
+
+// AD9959 bit precision
+const byte c_DDSbits = 32; 
 
 // input timing mode
 bool g_timeit = false;
@@ -81,17 +92,6 @@ bool g_QuadSPIActive = false;
 #define c_Mask8Nibble61 0b00000010
 #define c_Mask8Nibble71 0b00000001
 #define c_ReadMask 0x80
-
-
-// AD9959 DDS (Device Under Control)
-// clock variables
-const byte  c_PLLDiv  = 20;
-const float c_RefClk  = 25; 
-const float c_SysClk  = c_PLLDiv * c_RefClk;  //  [MHz]   DDS SYS_CLK  = PLL factor * REF_CLK = 20 * 25 MHz = 500 MHz
-const float c_SyncClk = 0.25 * c_SysClk;      //  [MHz]   DDS SYNC_CLK = 0.25 * SYS_CLK = 125 MHz
-
-// AD9959 bit precision
-const byte c_DDSbits = 32; 
 
 // AD9959 DAC channels
 const unsigned int c_Nch = 4;
@@ -194,6 +194,9 @@ void setup(){
 
   // disable debug serial prints for input strings timing
   if (g_timeit) g_debug = false;
+
+  // initialize AD9959 clock frequencies
+  initClk();
 
   // initialize digital pins
   initDigitalPins();
@@ -443,8 +446,8 @@ void storeParsedValues(byte cfgHdr){
           FTW1 = encodeFTW(g_parsedValues[offset + 1]);
           RDW  = encodeFTW(g_parsedValues[offset + 2]);
           FDW  = encodeFTW(g_parsedValues[offset + 3]);
-          RSRR = (byte)(g_parsedValues[offset + 4] * c_SyncClk);
-          FSRR = (byte)(g_parsedValues[offset + 5] * c_SyncClk);
+          RSRR = (byte)(g_parsedValues[offset + 4] * g_SyncClk);
+          FSRR = (byte)(g_parsedValues[offset + 5] * g_SyncClk);
         }
         // down
         else{
@@ -452,8 +455,8 @@ void storeParsedValues(byte cfgHdr){
           FTW1 = encodeFTW(g_parsedValues[offset]);
           RDW  = encodeFTW(g_parsedValues[offset + 3]);
           FDW  = encodeFTW(g_parsedValues[offset + 2]);
-          RSRR = (byte)(g_parsedValues[offset + 5] * c_SyncClk);
-          FSRR = (byte)(g_parsedValues[offset + 4] * c_SyncClk);
+          RSRR = (byte)(g_parsedValues[offset + 5] * g_SyncClk);
+          FSRR = (byte)(g_parsedValues[offset + 4] * g_SyncClk);
         }
         offset = offset + 6;
 
@@ -576,12 +579,19 @@ void storeLinearSweep(unsigned int ch, unsigned int FTW0, unsigned int FTW1,
  */
 void setPLLMultiplier(){
 
+  // PLL configuration byte
+  byte PLLbyte = 0x00;
+  PLLbyte = c_PLLMul << 2;
+  if (g_SysClk > 255) bitSet(PLLbyte, 7);
+
   // Function Register 1 bytes
   byte bufferFR1[c_FR1Size];
   bufferFR1[0] = c_FR1;         // 0b00000001
-  bufferFR1[1] = 0b11010000;    // FR1[23]:    VCO gain control    (= 1 if the system clock is higher than 255MHz);
-                                // FR1[22:18]: Clock Multiplier    (= 10100, i.e. x20);
+
+  bufferFR1[1] = PLLbyte;       // FR1[23]:    VCO gain control    (= 1 if the system clock is higher than 255MHz);
+                                // FR1[22:18]: Clock Multiplier
                                 // FR1[17:16]: Charge pump control (= 00, 75μA: best phase noise characteristics)
+
   bufferFR1[2] = 0b00000000;    // FR1[15]:    open;
                                 // FR1[14:12]: profile pin config;
                                 // FR1[11:10]: RU/RD bits;
@@ -610,6 +620,17 @@ void setPLLMultiplier(){
 
 
 // Board initialization functions
+/**
+ * Initialize clock frequencies (system clock and synchronization clock).
+ */
+void initClk(){
+
+  if (c_ClkMultiplier) g_SysClk = c_PLLMul * c_RefClk;  //  [MHz] PLL factor * REF_CLK (default: 20 * 25 MHz = 500 MHz)
+  else g_SysClk = c_RefClk;                             //        or REF_CLK
+  g_SyncClk = 0.25 * g_SysClk;                          //  [MHz]                      (default: 125 MHz)
+
+}
+
 /**
  * Initialize digital pins logic state.
  */
@@ -723,8 +744,8 @@ void hardResetDUC(){
   // all channels in single-tone mode
   g_sweepCh = 0b00000000;
 
-  // set Function Register 1 (PLL x20, Vco gain HIGH)
-  setPLLMultiplier();
+  // set Function Register 1 (g_SysClk = c_PLLMul * c_RefClk, Vco gain HIGH)
+  if (c_ClkMultiplier) setPLLMultiplier();
 
 }
 
@@ -1306,7 +1327,7 @@ void quadSPIBufferTransfer(byte buffer[], unsigned int buffer_size){
 unsigned int encodeFTW(float freq){
 
   unsigned int FTW;
-  FTW = (unsigned int)round(pow(2, c_DDSbits) * freq / c_SysClk);
+  FTW = (unsigned int)round(pow(2, c_DDSbits) * freq / g_SysClk);
 
   return FTW;
 
@@ -1321,7 +1342,7 @@ unsigned int encodeFTW(float freq){
 float decodeFrequency(unsigned int FTW){
 
   float freq;
-  freq = (float)(FTW * c_SysClk / pow(2, c_DDSbits));
+  freq = (float)(FTW * g_SysClk / pow(2, c_DDSbits));
 
   return freq;
 
@@ -1336,7 +1357,7 @@ float decodeFrequency(unsigned int FTW){
 float decodeSweepRampRate(byte SRR){
 
   float dt;
-  dt = (float)(SRR / c_SyncClk);
+  dt = (float)(SRR / g_SyncClk);
 
   return dt;
 
