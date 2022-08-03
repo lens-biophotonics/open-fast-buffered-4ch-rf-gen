@@ -205,15 +205,9 @@ void setup(){
   // (master reset signal and DUC initialization)
   hardResetDUC();
 
-  // initialize serial monitor (max baud rate)
-  Serial.begin(115200);
-
-  // initialize PC >>> board serial communication
-  if (!g_clientCXN){
-    Serial.println(c_pcUSBMsg);
-    g_clientCXN = true;
-  }
-
+  // initialize PC >>> board communication
+  initSerialUSB();
+  
   // activate interrupt service routines
   activateISR();
 
@@ -664,6 +658,20 @@ void initDigitalPins(){
   pinMode(c_HardResetInterrupt, INPUT_PULLUP);
   pinMode(c_singleSPInterrupt, INPUT_PULLUP);
   pinMode(c_quadSPInterrupt, INPUT_PULLUP);
+
+}
+
+
+/**
+ * Initialize PC >>> board serial USB communication.
+ */
+void initSerialUSB(){
+
+  Serial.begin(115200);
+  if (!g_clientCXN){
+    Serial.println(c_pcUSBMsg);
+    g_clientCXN = true;
+  }
 
 }
 
