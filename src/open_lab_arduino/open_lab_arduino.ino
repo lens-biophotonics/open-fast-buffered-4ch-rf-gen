@@ -25,7 +25,7 @@
 
 // SPI libraries to test (new connections >>> MOSI: pin 11; MISO: pin 12; SCLK0: pin 13)
 bool c_stdSPI = true;
-SPISettings settings(20000000, MSBFIRST, SPI_MODE0);
+SPISettings settings(60000000, MSBFIRST, SPI_MODE0);
 
 // debugging mode
 bool g_debug = false;
