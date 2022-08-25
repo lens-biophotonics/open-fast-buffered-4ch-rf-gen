@@ -1379,9 +1379,8 @@ float decodeSweepRampRate(byte SRR){
  */
 void ioUpdate(){
 
-  digitalWriteFast(c_IOUpdate, HIGH);
-  delayMicroseconds(1);
-  digitalWriteFast(c_IOUpdate, LOW);
+  digitalWrite(c_IOUpdate, HIGH);
+  digitalWrite(c_IOUpdate, LOW);
 
 }
 
