@@ -1,9 +1,9 @@
  /**
- * > Open Fast Buffered Four-Channel RF Generator:
- *   Control Software for AD9959 DDS
+ * Open Fast Buffered Four-Channel RF Generator:
+ * AD9959 Control Software
  * 
- * > Author
- *   Michele Sorelli (2022)
+ * Author:
+ * Michele Sorelli (2022)
  * 
  */
 #include <Arduino.h>
