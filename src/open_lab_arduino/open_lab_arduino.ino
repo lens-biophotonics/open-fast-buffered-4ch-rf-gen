@@ -1,5 +1,5 @@
  /**
- * > Open Source Laboratory Instrument Project:
+ * > Open Fast Buffered Four-Channel RF Generator:
  *   Control Software for AD9959 DDS
  * 
  * > Author
@@ -23,15 +23,16 @@
 // Global variables
 
 // AD9959 DDS (Device Under Control)
+
 // clock variables
-const bool c_ClkMultiplier = true;    // True: g_SysClk = c_PLLMul * c_RefClk; False: g_SysClk = c_RefClk
-const byte  c_PLLMul = 20;            // must be comprised between 4 and 20
-const float c_RefClk = 25;            // [MHz]
-float g_SysClk;
-float g_SyncClk;
+const bool c_ClkMultiplier = true;      // True: g_SysClk = c_PLLMul * c_RefClk; False: g_SysClk = c_RefClk
+const byte  c_PLLMul = 20;              // must be comprised between 4 and 20
+const float c_RefClk = 25;              // [MHz]
+float g_SysClk;                         // [MHz] system clock
+float g_SyncClk;                        // [MHz] synchronization clock
 
 // auto DDS activation (issue an I/O update pulse after each SPI communication)
-bool g_autoUpdate = true;
+bool g_autoUpdate = false;
 
 // debugging mode
 bool g_debug = false;
@@ -39,45 +40,25 @@ bool g_debug = false;
 // AD9959 bit precision
 const byte c_DDSbits = 32; 
 
-// input timing mode
-bool g_timeit = false;
-unsigned long g_strTime = 0;
-unsigned int g_strIn = 1;
-
-// PC serial communication
-bool g_clientCXN = false;       // USB serial connection established
-bool g_endCOM    = true;        // start serial communication flag
-unsigned long g_currenTime;
-unsigned long g_starTime;
-volatile unsigned long g_byteCount = 0;
-
-
-// digital pins (to AD9959 DDS)            Connection         Function
+// digital pin                             Connection         Function
 const byte c_PwnDwn    = 2;             // output to DUC   /  DUC power-down control
 const byte c_HardReset = 3;             // output to DUC   /  DUC master reset
 const byte c_IOUpdate  = 5;             // output to DUC   /  data I/O update 
 const byte c_ChipSel   = 10;            // output to DUC   /  DUC chip select
-const byte c_HardResetInterrupt = 31;   // input           /  trigger DUC hard reset routine
-const byte c_SoftResetInterrupt = 33;   // input           /  trigger MCU soft reset routine
-const byte c_singleSPInterrupt  = 35;   // input           /  trigger single-SPI activation routines
-const byte c_quadSPInterrupt    = 36;   // input           /  trigger quad-SPI activation routines
-const byte c_UpdateInterrupt    = 37;   // input           /  trigger DUC update routine
+const byte c_HardResetInterrupt = 37;   // input           /  trigger DUC hard reset routine
+const byte c_SoftResetInterrupt = 36;   // input           /  trigger MCU soft reset routine
+const byte c_singleSPInterrupt  = 35;   // input           /  trigger single-SPI activation routine
+const byte c_quadSPInterrupt    = 34;   // input           /  trigger quad-SPI activation routine
+const byte c_UpdateInterrupt    = 33;   // input           /  trigger DUC update routine
 
-// quad-SPI (data pins ordered from msb to lsb, + SCLK)
-const byte c_QuadSPIPins[5] = {15, 14, 18, 19, 40};
-const byte c_QuadSclk = 40;
-const byte c_QuadSclkDiv = 2;
-bool g_QuadSPIActive = false;
-
-// safe-clear mask for GPIO6_DR port pins
-// 1111 1111 1110 0000 1111 1111 1111 1111                                           
-#define c_SafeClearGPIO6Bit5(n)  (n & 0xffe0ffff) 
-
-// serial clock pin masks
-#define c_SclkHigh 0b00000000000100000000000000000000
-
-// nibble masks
-#define c_Mask8Nibble04 0b11110000
+// custom SPI
+const byte c_QuadSPIPins[5] = {15, 14, 18, 19, 40};   // SDIO pins ordered from msb to lsb + SCLK
+const byte c_QuadSclkDiv = 2;                         // SCLK divider
+bool g_QuadSPIActive = false;                         // SPI modality                           
+#define c_SafeClearGPIO6Bit5(n)  (n & 0xffe0ffff)     // safe-clear mask for GPIO6_DR port pins
+                                                      // 1111 1111 1110 0000 1111 1111 1111 1111
+#define c_SclkHigh 0b00000000000100000000000000000000 // serial clock pin masks
+#define c_Mask8Nibble04 0b11110000                    // nibble masks
 #define c_Mask8Nibble14 0b00001111
 #define c_Mask8Nibble02 0b11000000
 #define c_Mask8Nibble12 0b00110000
@@ -95,28 +76,27 @@ bool g_QuadSPIActive = false;
 
 // AD9959 DAC channels
 const unsigned int c_Nch = 4;
-const byte c_chSel0 = 0b00010000; // selection bytes
+const byte c_chSel0 = 0b00010000; // channel selection bytes
 const byte c_chSel1 = 0b00100000;
 const byte c_chSel2 = 0b01000000;
 const byte c_chSel3 = 0b10000000;
-const unsigned int c_Ch0   = 0;   // IDs
+const unsigned int c_Ch0   = 0;   // channel IDs
 const unsigned int c_Ch1   = 1;
 const unsigned int c_Ch2   = 2;
 const unsigned int c_Ch3   = 3;
 const unsigned int c_ChAll = 4;
-byte g_sweepCh = 0b00000000;
-
+byte g_sweepCh = 0b00000000;      // frequency sweep mode byte mask
 
 // AD9959 register addresses
-const byte c_CSR     = 0x00;  // Channel Selection Register
-const byte c_FR1     = 0x01;  // Function Register 1
-const byte c_CFR     = 0x03;  // Channel Function Register
-const byte c_CFTW0   = 0x04;  // Channel Frequency Tuning Word 0 (chirp minimum frequency)
-const byte c_CPOW0   = 0x05;  // Channel Phase Offset Word 0
-const byte c_LSRR    = 0x07;  // Linear Sweep Ramp Rate
-const byte c_RDW     = 0x08;  // LSR Rising Delta Word
-const byte c_FDW     = 0x09;  // LSR Falling Delta Word
-const byte c_CFTW1   = 0x0A;  // Channel Frequency Tuning Word 1 (chirp maximum frequency)
+const byte c_CSR   = 0x00;  // Channel Selection Register
+const byte c_FR1   = 0x01;  // Function Register 1
+const byte c_CFR   = 0x03;  // Channel Function Register
+const byte c_CFTW0 = 0x04;  // Channel Frequency Tuning Word 0 (chirp minimum frequency)
+const byte c_CPOW0 = 0x05;  // Channel Phase Offset Word 0
+const byte c_LSRR  = 0x07;  // Linear Sweep Ramp Rate
+const byte c_RDW   = 0x08;  // LSR Rising Delta Word
+const byte c_FDW   = 0x09;  // LSR Falling Delta Word
+const byte c_CFTW1 = 0x0A;  // Channel Frequency Tuning Word 1 (chirp maximum frequency)
 
 // AD9959 register sizes
 const byte c_SelSize = 2;
@@ -124,19 +104,28 @@ const byte c_FR1Size = 4;
 const byte c_CFRSize = 6;
 
 
-// input to MCU board
-const unsigned int c_maxSize = 4000;  // max buffer size
-using byteBuffer   = CircularBuffer<byte, c_maxSize>;
-using uintBuffer   = CircularBuffer<unsigned int, c_maxSize>;
+// PC USB serial communication
+bool g_timeit = false;
+unsigned long g_strTime = 0;          // string transfer time
+unsigned int g_strIn = 1;             // received data strings
+bool g_clientCXN = false;             // USB serial connection established
+bool g_endCOM    = true;              // USB serial communication start/end
+unsigned long g_currenTime;
+unsigned long g_starTime;
+volatile unsigned long g_byteCount = 0;
+
+const unsigned int c_maxSize = 4500;  // max buffer size
 using stringBuffer = CircularBuffer<String, c_maxSize>;
-String g_inString  = "";              // input instruction string
+String g_inString  = "";              // incoming instruction string
 stringBuffer g_inStringBuffer;        // input string FIFO buffer
 volatile unsigned int g_numIn = 0;    // overall input setting counter
-String g_outString = "";              // decoded instruction string
+String g_outString = "";              // instruction string to be decoded
 float g_parsedValues[24];             // array of parsed values
 
 
-// output from MCU board
+// FIFO buffers for DDS tuning words
+using byteBuffer = CircularBuffer<byte, c_maxSize>;
+using uintBuffer = CircularBuffer<unsigned int, c_maxSize>;
 volatile unsigned int g_numOut = 0;   // overall output setting counter
 uintBuffer g_bufferFTW0Ch0;           // channel 0 buffer: EITHER frequency tuning word (Single Tone Mode) OR chirp start frequency tuning word (Linear Sweep Mode)
 uintBuffer g_bufferFTW1Ch0;           // channel 0 buffer: chirp end frequency tuning word (Linear Sweep Mode only)             
@@ -165,7 +154,7 @@ byteBuffer g_bufferFSRRCh1;           // channel 1 buffer: Falling Step Ramp Rat
 byteBuffer g_bufferFSRRCh2;           // channel 2 buffer: Falling Step Ramp Rate
 byteBuffer g_bufferFSRRCh3;           // channel 3 buffer: Falling Step Ramp Rate
 
-// channel operation mode mask buffer
+// FIFO buffers for channel operation mode masks
 CircularBuffer<byte, c_maxSize * c_Nch> g_bufferSingleToneMode;
 CircularBuffer<byte, c_maxSize * c_Nch> g_bufferLinearSweepMode;
 
@@ -173,7 +162,7 @@ CircularBuffer<byte, c_maxSize * c_Nch> g_bufferLinearSweepMode;
 // message strings
 char c_pcUSBMsg[] PROGMEM = "\n * PC >>> MCU serial communication established!";
 char c_softRMsg[] PROGMEM = "\n * MCU ""soft"" reset!";
-char c_hardRMsg[] PROGMEM = "\n * MCU ""hard"" reset!";
+char c_hardRMsg[] PROGMEM = "\n * DUC ""hard"" reset!";
 char c_quSPIMsg[] PROGMEM = "\n * MCU >>> DUC quad-SPI communication activated!";
 char c_sgSPIMsg[] PROGMEM = "\n * MCU >>> DUC single-SPI communication activated!";
 char c_chErrMsg[] PROGMEM = "\n * No DDS channel selected: corrupted channel programming routine!";
@@ -188,7 +177,7 @@ char c_LSModMsg[] PROGMEM = "     Linear Sweep mode";
  * MCU board setup function (executed once)
  * . digital pins initialization
  * . frequency tuning word buffers initialization
- * . PC >>> board serial port initialization
+ * . PC >>> board serial communication initialization
  */
 void setup(){
 
@@ -201,8 +190,7 @@ void setup(){
   // initialize digital pins
   initDigitalPins();
 
-  // reset DUC
-  // (master reset signal and DUC initialization)
+  // reset DUC (master reset signal and DUC initialization)
   hardResetDUC();
 
   // initialize PC >>> board communication
@@ -246,7 +234,7 @@ void readSerialPort(){
     // start communication timer
     if (g_endCOM){
 
-      // input timing mode
+      // wait for serial prints when debugging (1 s)
       if (g_timeit) delay(1000);
 
       // deactivate interrupts
@@ -314,13 +302,13 @@ void decodeDataString(){
     // strings available for decoding
     if (!g_inStringBuffer.isEmpty()){
       
-      // wait for serial prints when debugging
+      // wait for serial prints when debugging (1 s)
       if (g_debug) delay(1000);
 
       // input timing mode
       if (g_timeit) g_strTime = micros();
 
-      // "pop" data string from input buffer
+      // get data string from FIFO buffer
       g_outString = g_inStringBuffer.shift();
   
       // get configuration header
@@ -378,7 +366,6 @@ byte decodeChannelHeader(){
 
 /**
  * Parse comma-separated data string.
- * 
  */
 void parseDataString(){
 
@@ -581,7 +568,6 @@ void setPLLMultiplier(){
   // Function Register 1 bytes
   byte bufferFR1[c_FR1Size];
   bufferFR1[0] = c_FR1;         // 0b00000001
-
   bufferFR1[1] = PLLbyte;       // FR1[23]:    VCO gain control    (= 1 if the system clock is higher than 255MHz);
                                 // FR1[22:18]: Clock Multiplier
                                 // FR1[17:16]: Charge pump control (= 00, 75μA: best phase noise characteristics)
@@ -595,7 +581,7 @@ void setPLLMultiplier(){
   // select all DDS channels
   selectDDSChannels(c_ChAll);
 
-  // transfer word to DDS via quad-SPI
+  // transfer word to DDS via custom SPI
   digitalWriteFast(c_ChipSel, LOW);
   if (g_QuadSPIActive) quadSPIBufferTransfer(bufferFR1, c_FR1Size);
   else singleSPIBufferTransfer(bufferFR1, c_FR1Size);
@@ -624,6 +610,7 @@ void initClk(){
   g_SyncClk = 0.25 * g_SysClk;                          //  [MHz]                      (default: 125 MHz)
 
 }
+
 
 /**
  * Initialize digital pins logic state.
@@ -679,9 +666,9 @@ void initSerialUSB(){
 /**
  * Initialize DUC tuning word buffers (to 0).
  */
-void resetFTWBuffers(){
+void clearFTWBuffers(){
 
-  // reset buffers to their initial state
+  // reset FIFO buffers to their initial state
   g_bufferFTW0Ch0.clear();
   g_bufferFTW1Ch0.clear();
   g_bufferFTW0Ch1.clear();
@@ -722,13 +709,13 @@ void softResetBoard(){
   Serial.println(c_softRMsg);
   
   // reset state variables
-  g_endCOM  = true;
+  g_endCOM = true;
   g_byteCount = 0;
   g_numIn  = 0;
   g_numOut = 0;
 
-  // reset FTW buffers
-  resetFTWBuffers();
+  // clear FTW buffers
+  clearFTWBuffers();
 
 }
 
@@ -741,7 +728,7 @@ void hardResetDUC(){
   // print to serial monitor
   Serial.println(c_hardRMsg);
 
-  // issue master reset pulse
+  // issue a master reset pulse (1μs)
   digitalWriteFast(c_HardReset, HIGH);
   delayMicroseconds(1);
   digitalWriteFast(c_HardReset, LOW);
@@ -797,11 +784,11 @@ void updateDUC(){
 
 
 /**
- * Initialize quad-SPI communication.
+ * Initialize quad-bit SPI communication.
  */
 void initQuadSPI(){ 
 
-  // only if quad-SPI is active
+  // if quad-bit SPI not already active
   if (g_QuadSPIActive == false){
 
     // print to serial monitor
@@ -815,7 +802,7 @@ void initQuadSPI(){
     // select slave device
     digitalWriteFast(c_ChipSel, LOW);
 
-    // send data via single-SPI
+    // send data via single-bit SPI
     singleSPIBufferTransfer(bufferInitSPI, 2);
 
     // de-select DUC
@@ -824,7 +811,7 @@ void initQuadSPI(){
     // issue an I/O update for changing the serial mode bits
     ioUpdate();
 
-    // quad-SPI is active
+    // quad-bit SPI is now active
     g_QuadSPIActive = true;
 
   }
@@ -833,11 +820,11 @@ void initQuadSPI(){
 
 
 /**
- * Initialize single-SPI communication.
+ * Initialize single-bit SPI communication.
  */
 void initSingleSPI(){ 
 
-  // only if quad-SPI is active
+  // if single-bit SPI not already active
   if (g_QuadSPIActive){
 
     // print to serial monitor
@@ -860,7 +847,7 @@ void initSingleSPI(){
     // issue an I/O update for changing the serial mode bits
     ioUpdate();
 
-    // quad-SPI is not active
+    //single-bit SPI is now active
     g_QuadSPIActive = false;
 
   }
@@ -1066,7 +1053,7 @@ void updateCh3(byte singleToneByte, byte linearSweepByte){
  */
 void spiTransferChST(byte ch, unsigned int FTW){
 
-  // words buffering
+  // tuning words buffering
   const byte sizeST = 5;
   byte bufferFTWST[sizeST];
   bufferFTWST[0] = c_CFTW0;                           // access Channel Frequency Tuning Word 0 register 0x04
@@ -1078,7 +1065,7 @@ void spiTransferChST(byte ch, unsigned int FTW){
   // select DDS channel
   selectDDSChannels(ch);
 
-  // transfer data to DDS (custom quad-SPI)
+  // transfer data to DUC via custom SPI
   digitalWriteFast(c_ChipSel, LOW);
   if (g_QuadSPIActive) quadSPIBufferTransfer(bufferFTWST, sizeST);
   else singleSPIBufferTransfer(bufferFTWST, sizeST);
@@ -1100,7 +1087,7 @@ void spiTransferChST(byte ch, unsigned int FTW){
 void spiTransferChLS(byte ch, unsigned int FTW0, unsigned int FTW1,
                      unsigned int RDW, unsigned int FDW, byte RSRR, byte FSRR){
   
-  // words buffering
+  // tuning words buffering
   const byte sizeLS = 23;
   byte bufferFTWLS[sizeLS];
 
@@ -1124,14 +1111,14 @@ void spiTransferChLS(byte ch, unsigned int FTW0, unsigned int FTW1,
   bufferFTWLS[12] = RSRR;
 
   // rising frequency delta word
-  bufferFTWLS[13] = c_RDW;                            // access RDW register 0x08
+  bufferFTWLS[13] = c_RDW;                                // access RDW register 0x08
   bufferFTWLS[14] = (byte)((RDW & 0xFF000000) >> 24);     // upper byte
   bufferFTWLS[15] = (byte)((RDW & 0x00FF0000) >> 16);     // second-high byte
   bufferFTWLS[16] = (byte)((RDW & 0x0000FF00) >> 8);      // second-low byte
   bufferFTWLS[17] = (byte)( RDW & 0x000000FF);            // lower byte
 
   // falling frequency delta word
-  bufferFTWLS[18] = c_FDW;                            // access FDW register 0x09
+  bufferFTWLS[18] = c_FDW;                                // access FDW register 0x09
   bufferFTWLS[19] = (byte)((FDW & 0xFF000000) >> 24);     // upper byte
   bufferFTWLS[20] = (byte)((FDW & 0x00FF0000) >> 16);     // second-high byte
   bufferFTWLS[21] = (byte)((FDW & 0x0000FF00) >> 8);      // second-low byte
@@ -1140,7 +1127,7 @@ void spiTransferChLS(byte ch, unsigned int FTW0, unsigned int FTW1,
   // select DDS channel
   selectDDSChannels(ch);
 
-  // transfer data to DDS (custom quad-SPI)
+  // transfer data to DUC via custom SPI
   digitalWriteFast(c_ChipSel, LOW);
   if (g_QuadSPIActive) quadSPIBufferTransfer(bufferFTWLS, sizeLS);
   else singleSPIBufferTransfer(bufferFTWLS, sizeLS);
@@ -1167,7 +1154,7 @@ void activateChSTM(byte chSelMask){
   bufferCFR[4] = 0x03;
   bufferCFR[5] = 0x00;
 
-  // transfer word to DDS via quad-SPI
+  // transfer data to DUC via custom SPI
   digitalWriteFast(c_ChipSel, LOW);  
   if (g_QuadSPIActive){
     bufferCFR[1] = bufferCFR[1] | 0b00000110;
@@ -1203,7 +1190,7 @@ void activateChLSM(byte chSelMask){
                                 // CFR[9:8]:   DAC full-scale         (=11 full-scale enabled)
   bufferCFR[5] = 0b00000000;    // CFR[7:0]    (DEFAULT VALUE: 0x02)
 
-  // transfer word to DDS via quad-SPI
+  // transfer data to DUC via custom SPI
   digitalWriteFast(c_ChipSel, LOW);
   if (g_QuadSPIActive){
     bufferCFR[1] = bufferCFR[1] | 0b00000110;
@@ -1252,7 +1239,7 @@ void selectDDSChannels(byte ch){
   // adjust serial mode bits
   if (g_QuadSPIActive) bufferChSel[1] = bufferChSel[1] | 0b00000110;
 
-  // transfer buffer content to DUC (custom quad-SPI)
+  // transfer data to DUC via custom SPI
   digitalWriteFast(c_ChipSel, LOW);
   if (g_QuadSPIActive) quadSPIBufferTransfer(bufferChSel, c_SelSize);
   else singleSPIBufferTransfer(bufferChSel, c_SelSize);
@@ -1263,9 +1250,9 @@ void selectDDSChannels(byte ch){
 
 
 
-// Custom quad-SPI functions
+// Custom SPI functions
 /**
- * Custom SPI 8-bit data transfer (with serial clock divider).
+ * Custom single-bit SPI byte transfer (with serial clock divider).
  * @param[in] data input byte to be transferred
  */
 void singleSPIByteTransfer(byte data){
@@ -1289,7 +1276,7 @@ void singleSPIByteTransfer(byte data){
 
 
 /**
- * Custom quad-SPI 8-bit data transfer (with serial clock divider).
+ * Custom quad-bit SPI byte transfer (with serial clock divider).
  * @param[in] data input byte to be transferred
  */
 void quadSPIByteTransfer(byte data){
@@ -1301,24 +1288,22 @@ void quadSPIByteTransfer(byte data){
 
 
 /**
- * Custom SPI buffer transfer (with serial clock divider).
+ * Custom single-bit SPI buffer transfer (with serial clock divider).
  * @param[in] buffer input buffer to be transferred
  * @param[in] buffer_size buffer size in bytes
  */
 void singleSPIBufferTransfer(byte buffer[], unsigned int buffer_size){
-  // loop over buffer byte elements
   for (unsigned int b = 0; b < buffer_size; b++) singleSPIByteTransfer(buffer[b]);
   GPIO6_DR = c_SafeClearGPIO6Bit5(GPIO6_DR);
 }
 
 
 /**
- * Custom quad-SPI buffer transfer (with serial clock divider).
+ * Custom quad-bit SPI buffer transfer (with serial clock divider).
  * @param[in] buffer input buffer to be transferred
  * @param[in] buffer_size buffer size in bytes
  */
 void quadSPIBufferTransfer(byte buffer[], unsigned int buffer_size){
-  // loop over buffer byte elements
   for (unsigned int b = 0; b < buffer_size; b++) quadSPIByteTransfer(buffer[b]);
   GPIO6_DR = 0;
 }
@@ -1373,9 +1358,9 @@ float decodeSweepRampRate(byte SRR){
 
 
 /**
- * Issue an I/O update pulse via MCU board.
+ * Issue an I/O update pulse.
  * NOTE: I/O update pulses are oversampled by the SYNC_CLK,
- * therefore their width must be greater than one SYNC_CLK period, i.e. 8 ns.
+ * therefore their width must be greater than one SYNC_CLK period, i.e. 8 ns when SYS_CLK = 500 MHz.
  */
 void ioUpdate(){
 
@@ -1396,7 +1381,7 @@ void printSerialCOM(){
   // get current time
   g_currenTime = micros();
 
-  // wait for serial monitor to be opened
+  // wait for serial monitor to be opened (2 s)
   if (g_debug) delay(2000);
 
   // info  
@@ -1428,7 +1413,7 @@ void printByte(byte B){
 
 
 /**
- * Print data string read time to serial monitor.
+ * Print data string transfer time to serial monitor.
  */
 void printReadTime(){
   char str[50];
@@ -1450,7 +1435,7 @@ void printDecodeTime(){
 
 
 /**
- * Print complete 32-bit uint word to serial monitor.
+ * Print complete 32-bit word to serial monitor.
  */
 void printUint(unsigned int UI){
   for(int i = 31; i >= 0; i--){
@@ -1486,21 +1471,21 @@ void printLinearSweep(unsigned int FTW0, unsigned int FTW1, unsigned int RDW, un
   float df;
   float dt;
 
-  // start frequency
+  // frequency sweep start frequency
   Serial.println(F("   Start"));
   Serial.print(F("   FTW0:           "));
   printUint(FTW0);  
   sprintf(str,   "   f  [MHz]:       %.6f\n", decodeFrequency(FTW0));
   Serial.println(str);
 
-  // end frequency
+  // frequency sweep end frequency
   Serial.println(F("   End"));
   Serial.print(F("   FTW1:           "));
   printUint(FTW0);
   sprintf(str,   "   f  [MHz]:       %.6f\n", decodeFrequency(FTW1));
   Serial.println(str);
 
-  // rising ramp phase
+  // rising frequency sweep phase
   df = decodeFrequency(RDW);
   dt = decodeSweepRampRate(RSRR);
   Serial.println(F("   Rise"));
@@ -1515,7 +1500,7 @@ void printLinearSweep(unsigned int FTW0, unsigned int FTW1, unsigned int RDW, un
   sprintf(str,   "   chirp [MHz/us]: %.6f\n", df/dt);
   Serial.println(str);
 
-  // falling ramp phase
+  // falling frequency sweep phase
   df = decodeFrequency(FDW);
   dt = decodeSweepRampRate(FSRR);
   Serial.println(F("   Fall"));
