@@ -398,9 +398,8 @@ void storeParsedValues(byte cfgHdr){
 
   // debug mode
   if (g_debug){
-    char str[20];
-    sprintf(str, "\n * %d >>> MCU\n", g_numIn);
-    Serial.println(str);
+    char str[30];
+    Serial.println(snprintf(str, 30, "\n * %d >>> MCU\n", g_numIn));
   }
 
   // backward loop over channels (from 3 to 0)
@@ -412,9 +411,8 @@ void storeParsedValues(byte cfgHdr){
      
       // debug mode
       if (g_debug){
-        char strCh[20];
-        sprintf(strCh, " . Channel %d: ", ch);
-        Serial.print(strCh);
+        char strCh[15];
+        Serial.print(snprintf(strCh, 15, " . Channel %u: ", ch));
       } 
 
       // check channel mode bit in cfgHdr (0: STM; 1: LSM)
@@ -752,9 +750,8 @@ void updateDUC(){
 
   // debug mode
   if (g_debug){
-    char str[20];
-    sprintf(str, "\n * %d >>> DUC\n", g_numOut);
-    Serial.println(str);
+    char str[30];
+    Serial.println(snprintf(str, 30, "\n * %d >>> DUC\n", g_numOut));
   }
 
   // activate channel operation modes (updated channels only)
@@ -766,13 +763,13 @@ void updateDUC(){
   if (lsMask) activateChLSM(lsMask);
 
   // transfer new configurations to DUC channels
-  updateCh(0, stMode, lsMode, &g_bufferFTW0Ch0, &g_bufferFTW1Ch0, 
+  updateCh(c_Ch0, stMode, lsMode, &g_bufferFTW0Ch0, &g_bufferFTW1Ch0, 
            &g_bufferRDWCh0, &g_bufferFDWCh0, &g_bufferRSRRCh0, &g_bufferFSRRCh0);
-  updateCh(1, stMode, lsMode, &g_bufferFTW0Ch1, &g_bufferFTW1Ch1, 
+  updateCh(c_Ch1, stMode, lsMode, &g_bufferFTW0Ch1, &g_bufferFTW1Ch1, 
            &g_bufferRDWCh1, &g_bufferFDWCh1, &g_bufferRSRRCh1, &g_bufferFSRRCh1);
-  updateCh(2, stMode, lsMode, &g_bufferFTW0Ch2, &g_bufferFTW1Ch2, 
+  updateCh(c_Ch2, stMode, lsMode, &g_bufferFTW0Ch2, &g_bufferFTW1Ch2, 
            &g_bufferRDWCh2, &g_bufferFDWCh2, &g_bufferRSRRCh2, &g_bufferFSRRCh2);
-  updateCh(3, stMode, lsMode, &g_bufferFTW0Ch3, &g_bufferFTW1Ch3, 
+  updateCh(c_Ch3, stMode, lsMode, &g_bufferFTW0Ch3, &g_bufferFTW1Ch3, 
            &g_bufferRDWCh3, &g_bufferFDWCh3, &g_bufferRSRRCh3, &g_bufferFSRRCh3);
 
   // update linear sweep channels
@@ -899,8 +896,9 @@ void updateCh(unsigned int ch, byte singleToneByte, byte linearSweepByte,
               byteBuffer* bufferRSRR, byteBuffer* bufferFSRR){
 
   unsigned int offset = ch + 4;
-  char str[20];
-  if (g_debug) sprintf(str, " . Channel %u: ", ch);
+
+  char str[15];
+  if (g_debug) snprintf(str, 15, " . Channel %u: ", ch);
 
   if (bitRead(singleToneByte, offset) == 1){
 
@@ -1308,8 +1306,7 @@ void printByte(byte B){
  */
 void printReadTime(){
   char str[50];
-  sprintf(str, "\n * String %d serial time: %luus", g_strIn, micros() - g_strTime);
-  Serial.println(str);
+  Serial.println(snprintf(str, 50, "\n * String %d serial time: %luus", g_strIn, micros() - g_strTime));
   g_strIn++;
   g_strTime = micros();
 }
@@ -1320,7 +1317,7 @@ void printReadTime(){
  */
 void printDecodeTime(){
   char str[50];
-  sprintf(str, " * String %d decode time: %luus\n", g_numIn, micros() - g_strTime);
+  snprintf(str, 50, " * String %d decode time: %luus\n", g_numIn, micros() - g_strTime);
   Serial.println(str);
 }
 
@@ -1365,16 +1362,14 @@ void printLinearSweep(unsigned int FTW0, unsigned int FTW1, unsigned int RDW, un
   // frequency sweep start frequency
   Serial.println(F("   Start"));
   Serial.print(F("   FTW0:           "));
-  printUint(FTW0);  
-  sprintf(str,   "   f  [MHz]:       %.6f\n", decodeFrequency(FTW0));
-  Serial.println(str);
+  printUint(FTW0);
+  Serial.println(snprintf(str, 60,   "   f  [MHz]:       %.6f\n", decodeFrequency(FTW0)));
 
   // frequency sweep end frequency
   Serial.println(F("   End"));
   Serial.print(F("   FTW1:           "));
   printUint(FTW0);
-  sprintf(str,   "   f  [MHz]:       %.6f\n", decodeFrequency(FTW1));
-  Serial.println(str);
+  Serial.println(snprintf(str, 60,   "   f  [MHz]:       %.6f\n", decodeFrequency(FTW1)));
 
   // rising frequency sweep phase
   df = decodeFrequency(RDW);
@@ -1382,14 +1377,11 @@ void printLinearSweep(unsigned int FTW0, unsigned int FTW1, unsigned int RDW, un
   Serial.println(F("   Rise"));
   Serial.print(F("   RDW:            "));
   printUint(RDW);  
-  sprintf(str,   "   df [MHz]:       %.9f\n", df);
-  Serial.print(str);
+  Serial.print(snprintf(str, 60, "   df [MHz]:       %.9f\n", df));
   Serial.print(F("   RSRR:           "));
   printByte(RSRR);
-  sprintf(str,   "   dt  [us]:       %.3f\n", dt);
-  Serial.print(str);
-  sprintf(str,   "   chirp [MHz/us]: %.6f\n", df/dt);
-  Serial.println(str);
+  Serial.print(snprintf(str, 60, "   dt  [us]:       %.3f\n", dt));
+  Serial.println(snprintf(str, 60, "   chirp [MHz/us]: %.6f\n", df/dt));
 
   // falling frequency sweep phase
   df = decodeFrequency(FDW);
@@ -1397,13 +1389,10 @@ void printLinearSweep(unsigned int FTW0, unsigned int FTW1, unsigned int RDW, un
   Serial.println(F("   Fall"));
   Serial.print(F("   FDW:            "));
   printUint(FDW);
-  sprintf(str,   "   df [MHz]:       %.9f\n", df);
-  Serial.print(str);
+  Serial.print(snprintf(str, 60, "   df [MHz]:       %.9f\n", df));
   Serial.print(F("   FSRR:           "));
   printByte(FSRR);
-  sprintf(str,   "   dt  [us]:       %.3f\n", dt);
-  Serial.print(str);
-  sprintf(str,   "   chirp [MHz/us]: %.6f\n", df/dt);
-  Serial.println(str);           
+  Serial.print(snprintf(str, 60, "   dt  [us]:       %.3f\n", dt));
+  Serial.println(snprintf(str, 60, "   chirp [MHz/us]: %.6f\n", df/dt));           
 
 }
