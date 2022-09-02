@@ -796,7 +796,8 @@ void initQuadSPI(){
     Serial.println(c_quSPIMsg);
 
     // transfer 00000000 00000110 via "custom" single-bit SPI
-    byte bufferInitSPI[2];
+    byte initSize = 2;
+    byte bufferInitSPI[initSize];
     bufferInitSPI[0] = c_CSR;
     bufferInitSPI[1] = 0b11110110;
 
@@ -804,7 +805,7 @@ void initQuadSPI(){
     digitalWriteFast(c_ChipSel, LOW);
 
     // send data via single-bit SPI
-    singleSPIBufferTransfer(bufferInitSPI, 2);
+    singleSPIBufferTransfer(bufferInitSPI, initSize);
 
     // de-select DUC
     digitalWriteFast(c_ChipSel, HIGH);
@@ -832,7 +833,8 @@ void initSingleSPI(){
     Serial.println(c_sgSPIMsg);
 
     // transfer 00000000 11110000 via "custom" quad-bit SPI
-    byte bufferInitSPI[2];
+    byte initSize = 2;
+    byte bufferInitSPI[initSize];
     bufferInitSPI[0] = c_CSR;
     bufferInitSPI[1] = 0b11110000;
     
@@ -840,7 +842,7 @@ void initSingleSPI(){
     digitalWriteFast(c_ChipSel, LOW);
 
     // send data via quad-SPI
-    quadSPIBufferTransfer(bufferInitSPI, 2);
+    quadSPIBufferTransfer(bufferInitSPI, initSize);
 
     // de-select DUC
     digitalWriteFast(c_ChipSel, HIGH);
