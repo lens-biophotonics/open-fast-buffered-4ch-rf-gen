@@ -627,9 +627,9 @@ void initDigitalPins(){
   // set I/O update pin as output, set it LOW
   pinMode(c_IOUpdate, OUTPUT);
 
-  // set chip select pin as output, set it LOW
+  // set chip select pin as output (active LOW), set it HIGH
   pinMode(c_ChipSel, OUTPUT);
-  digitalWriteFast(c_ChipSel, LOW);
+  digitalWriteFast(c_ChipSel, HIGH);
 
   // set SPI communication pins
   for (byte i = 0; i < 5; i++){
