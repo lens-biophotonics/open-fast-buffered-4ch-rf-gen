@@ -1196,7 +1196,7 @@ void singleSPIBufferTransfer(byte buffer[], unsigned int buffer_size){
  */
 void quadSPIBufferTransfer(byte buffer[], unsigned int buffer_size){
   for (unsigned int b = 0; b < buffer_size; b++) quadSPIByteTransfer(buffer[b]);
-  GPIO6_DR = 0;
+  GPIO6_DR = c_SafeClearGPIO6Bit5(GPIO6_DR);
 }
 
 
