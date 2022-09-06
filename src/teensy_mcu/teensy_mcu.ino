@@ -701,7 +701,7 @@ void clearFTWBuffers(){
 /**
  * MCU board re-initialization ("soft" reset): triggered when the c_SoftResetInterrupt pin goes from low to high.
  */
-void softResetBoard(){
+void softResetMCU(){
   
   // print to serial monitor
   Serial.println(c_softRMsg);
@@ -865,7 +865,7 @@ void activateISR(){
   
   attachInterrupt(digitalPinToInterrupt(c_UpdateInterrupt), updateDUC, RISING);
   attachInterrupt(digitalPinToInterrupt(c_HardResetInterrupt), hardResetDUC, RISING);
-  attachInterrupt(digitalPinToInterrupt(c_SoftResetInterrupt), softResetBoard, RISING);  
+  attachInterrupt(digitalPinToInterrupt(c_SoftResetInterrupt), softResetMCU, RISING);  
   attachInterrupt(digitalPinToInterrupt(c_singleSPInterrupt), initSingleSPI, RISING);
   attachInterrupt(digitalPinToInterrupt(c_quadSPInterrupt), initQuadSPI, RISING);
 
