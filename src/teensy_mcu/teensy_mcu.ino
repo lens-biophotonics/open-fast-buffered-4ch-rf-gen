@@ -9,6 +9,7 @@
 #include <Arduino.h>
 #include <avr/pgmspace.h>
 #include <CircularBuffer.h>
+#include <SPI.h>
 
 
 /** 
@@ -50,6 +51,10 @@ const byte c_SoftResetInterrupt = 36;   // input           /  trigger MCU soft r
 const byte c_singleSPInterrupt  = 35;   // input           /  trigger single-SPI activation routine
 const byte c_quadSPInterrupt    = 34;   // input           /  trigger quad-SPI activation routine
 const byte c_UpdateInterrupt    = 33;   // input           /  trigger DUC update routine
+
+// standard SPI library [Hz]
+const bool c_stdSPI = false;
+const unsigned int spi_fsclk = 60000000;
 
 // custom SPI
 const byte c_QuadSPIPins[5] = {15, 14, 18, 19, 40};   // SDIO pins ordered from msb to lsb + SCLK
@@ -579,11 +584,15 @@ void setPLLMultiplier(){
   // select all DDS channels
   selectDDSChannels(c_ChAll);
 
-  // transfer word to DDS via custom SPI
-  digitalWriteFast(c_ChipSel, LOW);
-  if (g_QuadSPIActive) quadSPIBufferTransfer(bufferFR1, c_FR1Size);
-  else singleSPIBufferTransfer(bufferFR1, c_FR1Size);
-  digitalWriteFast(c_ChipSel, HIGH);
+  // transfer word to DDS via standard SPI
+  if (c_stdSPI) SPIBufferTransfer(bufferFR1, c_FR1Size);
+  // ... or custom SPI
+  else{
+    digitalWriteFast(c_ChipSel, LOW);
+    if (g_QuadSPIActive) quadSPIBufferTransfer(bufferFR1, c_FR1Size);
+    else singleSPIBufferTransfer(bufferFR1, c_FR1Size);
+    digitalWriteFast(c_ChipSel, HIGH);
+  }
 
   // issue an I/O update pulse: FR1 register is set
   ioUpdate();
@@ -627,22 +636,29 @@ void initDigitalPins(){
   // set I/O update pin as output, set it LOW
   pinMode(c_IOUpdate, OUTPUT);
 
-  // set chip select pin as output (active LOW), set it HIGH
-  pinMode(c_ChipSel, OUTPUT);
-  digitalWriteFast(c_ChipSel, HIGH);
+  // initialize standard SPI
+  if (c_stdSPI) SPI.begin();
+  else{
+    // set chip select pin as output (active LOW), set it HIGH
+    pinMode(c_ChipSel, OUTPUT);
+    digitalWriteFast(c_ChipSel, HIGH);
 
-  // set SPI communication pins
-  for (byte i = 0; i < 5; i++){
-    pinMode(c_QuadSPIPins[i], OUTPUT);
-    digitalWriteFast(c_QuadSPIPins[i], LOW);
+    // set SPI communication pins
+    for (byte i = 0; i < 5; i++){
+        pinMode(c_QuadSPIPins[i], OUTPUT);
+        digitalWriteFast(c_QuadSPIPins[i], LOW);
+    }
+
+    // set DUC update interrupt pins as input
+    pinMode(c_singleSPInterrupt, INPUT_PULLUP);
+    pinMode(c_quadSPInterrupt, INPUT_PULLUP);
+
   }
-
+  
   // set DUC update interrupt pins as input
   pinMode(c_UpdateInterrupt, INPUT_PULLUP);
   pinMode(c_SoftResetInterrupt, INPUT_PULLUP);
-  pinMode(c_HardResetInterrupt, INPUT_PULLUP);
-  pinMode(c_singleSPInterrupt, INPUT_PULLUP);
-  pinMode(c_quadSPInterrupt, INPUT_PULLUP);
+  pinMode(c_HardResetInterrupt, INPUT_PULLUP); 
 
 }
 
@@ -865,9 +881,12 @@ void activateISR(){
   
   attachInterrupt(digitalPinToInterrupt(c_UpdateInterrupt), updateDUC, RISING);
   attachInterrupt(digitalPinToInterrupt(c_HardResetInterrupt), hardResetDUC, RISING);
-  attachInterrupt(digitalPinToInterrupt(c_SoftResetInterrupt), softResetMCU, RISING);  
-  attachInterrupt(digitalPinToInterrupt(c_singleSPInterrupt), initSingleSPI, RISING);
-  attachInterrupt(digitalPinToInterrupt(c_quadSPInterrupt), initQuadSPI, RISING);
+  attachInterrupt(digitalPinToInterrupt(c_SoftResetInterrupt), softResetMCU, RISING);
+
+  if (!c_stdSPI){
+    attachInterrupt(digitalPinToInterrupt(c_singleSPInterrupt), initSingleSPI, RISING);
+    attachInterrupt(digitalPinToInterrupt(c_quadSPInterrupt), initQuadSPI, RISING);
+  }
 
 }
 
@@ -880,8 +899,11 @@ void deactivateISR(){
   detachInterrupt(digitalPinToInterrupt(c_UpdateInterrupt));
   detachInterrupt(digitalPinToInterrupt(c_HardResetInterrupt));
   detachInterrupt(digitalPinToInterrupt(c_SoftResetInterrupt));
-  detachInterrupt(digitalPinToInterrupt(c_singleSPInterrupt));
-  detachInterrupt(digitalPinToInterrupt(c_quadSPInterrupt));
+
+  if (!c_stdSPI){
+    detachInterrupt(digitalPinToInterrupt(c_singleSPInterrupt));
+    detachInterrupt(digitalPinToInterrupt(c_quadSPInterrupt));
+  }
 
 }
 
@@ -956,11 +978,10 @@ void spiTransferChST(byte ch, unsigned int FTW){
   // select DDS channel
   selectDDSChannels(ch);
 
-  // transfer data to DUC via custom SPI
-  digitalWriteFast(c_ChipSel, LOW);
-  if (g_QuadSPIActive) quadSPIBufferTransfer(bufferFTWST, sizeST);
-  else singleSPIBufferTransfer(bufferFTWST, sizeST);
-  digitalWriteFast(c_ChipSel, HIGH);
+  // transfer data to DUC via standard SPI
+  if (c_stdSPI) SPIBufferTransfer(bufferFTWST, sizeST);
+  // ... or custom SPI
+  else customSPIBufferTransfer(bufferFTWST, sizeST);
 
 }
 
@@ -1017,12 +1038,11 @@ void spiTransferChLS(byte ch, unsigned int FTW0, unsigned int FTW1,
 
   // select DDS channel
   selectDDSChannels(ch);
-
-  // transfer data to DUC via custom SPI
-  digitalWriteFast(c_ChipSel, LOW);
-  if (g_QuadSPIActive) quadSPIBufferTransfer(bufferFTWLS, sizeLS);
-  else singleSPIBufferTransfer(bufferFTWLS, sizeLS);
-  digitalWriteFast(c_ChipSel, HIGH);
+ 
+  // transfer data to DUC via standard SPI
+  if (c_stdSPI) SPIBufferTransfer(bufferFTWLS, sizeLS);
+  // ... or custom SPI
+  else customSPIBufferTransfer(bufferFTWLS, sizeLS);
 
 }
 
@@ -1045,14 +1065,14 @@ void activateChSTM(byte chSelMask){
   bufferCFR[4] = 0x03;
   bufferCFR[5] = 0x00;
 
-  // transfer data to DUC via custom SPI
-  digitalWriteFast(c_ChipSel, LOW);  
-  if (g_QuadSPIActive){
-    bufferCFR[1] = bufferCFR[1] | 0b00000110;
-    quadSPIBufferTransfer(bufferCFR, c_CFRSize);
+  // transfer data to DUC via standard SPI
+  if (c_stdSPI) SPIBufferTransfer(bufferCFR, c_CFRSize);
+  // ... or custom SPI
+  else{
+    // adjust serial mode bits
+    if (g_QuadSPIActive) bufferCFR[1] = bufferCFR[1] | 0b00000110;
+    customSPIBufferTransfer(bufferCFR, c_CFRSize);
   }
-  else singleSPIBufferTransfer(bufferCFR, c_CFRSize);
-  digitalWriteFast(c_ChipSel, HIGH);
 
   // issue an I/O update pulse: CFR is set
   ioUpdate();
@@ -1081,14 +1101,14 @@ void activateChLSM(byte chSelMask){
                                 // CFR[9:8]:   DAC full-scale         (=11 full-scale enabled)
   bufferCFR[5] = 0b00000000;    // CFR[7:0]    (DEFAULT VALUE: 0x02)
 
-  // transfer data to DUC via custom SPI
-  digitalWriteFast(c_ChipSel, LOW);
-  if (g_QuadSPIActive){
-    bufferCFR[1] = bufferCFR[1] | 0b00000110;
-    quadSPIBufferTransfer(bufferCFR, c_CFRSize);
+  // transfer data to DUC via standard SPI
+  if (c_stdSPI) SPIBufferTransfer(bufferCFR, c_CFRSize);
+  // ... or custom SPI
+  else{
+    // adjust serial mode bits
+    if (g_QuadSPIActive) bufferCFR[1] = bufferCFR[1] | 0b00000110;
+    customSPIBufferTransfer(bufferCFR, c_CFRSize);
   }
-  else singleSPIBufferTransfer(bufferCFR, c_CFRSize);
-  digitalWriteFast(c_ChipSel, HIGH);
 
   // issue an I/O update pulse: CFR is set
   ioUpdate();
@@ -1127,14 +1147,33 @@ void selectDDSChannels(byte ch){
       break;
   }
 
-  // adjust serial mode bits
-  if (g_QuadSPIActive) bufferChSel[1] = bufferChSel[1] | 0b00000110;
+  // transfer data to DUC via standard SPI
+  if (c_stdSPI) SPIBufferTransfer(bufferChSel, c_SelSize);
+  // ... or custom SPI
+  else{
+    // adjust serial mode bits
+    if (g_QuadSPIActive) bufferChSel[1] = bufferChSel[1] | 0b00000110;
+    customSPIBufferTransfer(bufferChSel, c_SelSize);
+  }
 
-  // transfer data to DUC via custom SPI
+}
+
+
+
+
+// Standard SPI functions
+/**
+ * Standard single-bit SPI buffer transfer using Arduino Due's SPI header.
+ * @param[in] buffer input buffer to be transferred
+ * @param[in] buffer_size buffer size in bytes
+ */
+void SPIBufferTransfer(byte buffer[], unsigned int buffer_size){
+
   digitalWriteFast(c_ChipSel, LOW);
-  if (g_QuadSPIActive) quadSPIBufferTransfer(bufferChSel, c_SelSize);
-  else singleSPIBufferTransfer(bufferChSel, c_SelSize);
+  SPI.beginTransaction(SPISettings(spi_fsclk, MSBFIRST, SPI_MODE0));
+  SPI.transfer(buffer, buffer_size);
   digitalWriteFast(c_ChipSel, HIGH);
+  SPI.endTransaction();
 
 }
 
@@ -1197,6 +1236,21 @@ void singleSPIBufferTransfer(byte buffer[], unsigned int buffer_size){
 void quadSPIBufferTransfer(byte buffer[], unsigned int buffer_size){
   for (unsigned int b = 0; b < buffer_size; b++) quadSPIByteTransfer(buffer[b]);
   GPIO6_DR = c_SafeClearGPIO6Bit5(GPIO6_DR);
+}
+
+
+/**
+ * Custom SPI buffer transfer using digital port mapping.
+ * @param[in] buffer input buffer to be transferred
+ * @param[in] buffer_size buffer size in bytes
+ */
+void customSPIBufferTransfer(byte buffer[], unsigned int buffer_size){
+
+    digitalWriteFast(c_ChipSel, LOW);
+    if (g_QuadSPIActive) quadSPIBufferTransfer(buffer, buffer_size);
+    else singleSPIBufferTransfer(buffer, buffer_size);
+    digitalWriteFast(c_ChipSel, HIGH);
+
 }
 
 

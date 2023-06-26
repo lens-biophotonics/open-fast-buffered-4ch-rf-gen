@@ -12,6 +12,9 @@
 #include <SPI.h>
 
 
+// TODO: introduce custom single- and quad-bit serial communication functions with new Due-compatible port!
+
+
 /** 
  * Teensy 4.1 Custom Serial I/O : GPIO6_DR pin mapping (from msb to lsb) 
  * 
@@ -50,9 +53,8 @@ const byte c_HardResetInterrupt = 37;    // input           /  trigger DUC hard 
 const byte c_SoftResetInterrupt = 36;    // input           /  trigger MCU soft reset routine
 const byte c_UpdateInterrupt    = 33;    // input           /  trigger DUC update routine
 
-// standard SPI
-const unsigned int spi_fsclk = 60000000; // [Hz]
-
+// standard SPI library [Hz]
+const unsigned int spi_fsclk = 60000000;
 
 // AD9959 DAC channels
 #define c_Mask8Nibble04 0b11110000       // nibble masks (channel decode)
