@@ -62,7 +62,7 @@ const byte c_QuadSclkDiv = 2;                         // SCLK divider
 bool g_QuadSPIActive = false;                         // SPI modality                           
 #define c_SafeClearGPIO6Bit5(n)  (n & 0xffe0ffff)     // safe-clear mask for GPIO6_DR port pins
                                                       // 1111 1111 1110 0000 1111 1111 1111 1111
-#define c_SclkHigh 0b00000000000100000000000000000000 // serial clock pin masks
+#define c_SclkHigh 0b00000000000100000000000000000000 // serial clock pin mask
 #define c_Mask8Nibble04 0b11110000                    // nibble masks
 #define c_Mask8Nibble14 0b00001111
 #define c_Mask8Nibble02 0b11000000
@@ -638,6 +638,7 @@ void initDigitalPins(){
 
   // initialize standard SPI
   if (c_stdSPI) SPI.begin();
+  // initialize custom SPI
   else{
     // set chip select pin as output (active LOW), set it HIGH
     pinMode(c_ChipSel, OUTPUT);
@@ -1169,9 +1170,9 @@ void selectDDSChannels(byte ch){
  */
 void SPIBufferTransfer(byte buffer[], unsigned int buffer_size){
 
-  digitalWriteFast(c_ChipSel, LOW);
   SPI.beginTransaction(SPISettings(spi_fsclk, MSBFIRST, SPI_MODE0));
-  SPI.transfer(buffer, buffer_size);
+  digitalWriteFast(c_ChipSel, LOW);  
+  for (unsigned int b = 0; b < buffer_size; b++) SPI.transfer(buffer[b]);
   digitalWriteFast(c_ChipSel, HIGH);
   SPI.endTransaction();
 
@@ -1361,8 +1362,11 @@ void printByte(byte B){
  * Print data string transfer time to serial monitor.
  */
 void printReadTime(){
-  char str[50];
-  Serial.println(snprintf(str, 50, "\n * String %d serial time: %luus", g_strIn, micros() - g_strTime));
+  unsigned long t = micros();
+  byte len = 50;
+  char str[len];
+  snprintf(str, len, "\n * String %d serial time: %lu us", g_strIn, t - g_strTime);
+  Serial.println(str);
   g_strIn++;
   g_strTime = micros();
 }
@@ -1372,8 +1376,10 @@ void printReadTime(){
  * Print data string decoding time to serial monitor.
  */
 void printDecodeTime(){
-  char str[50];
-  snprintf(str, 50, " * String %d decode time: %luus\n", g_numIn, micros() - g_strTime);
+  unsigned long t = micros();
+  byte len = 50;
+  char str[len];
+  snprintf(str, len, " * String %d decode time: %lu us\n", g_numIn, t - g_strTime);
   Serial.println(str);
 }
 

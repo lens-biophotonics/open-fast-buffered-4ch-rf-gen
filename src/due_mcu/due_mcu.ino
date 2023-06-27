@@ -3,23 +3,19 @@
  * AD9959 Control Software
  * 
  * Author:
- * Michele Sorelli (2022)
+ * Michele Sorelli (2023)
  * 
  */
 #include <Arduino.h>
-#include <avr/pgmspace.h>
 #include <CircularBuffer.h>
 #include <SPI.h>
 
 
-// TODO: introduce custom single- and quad-bit serial communication functions with new Due-compatible port!
-
-
 /** 
- * Teensy 4.1 Custom Serial I/O : GPIO6_DR pin mapping (from msb to lsb) 
+ * Arduino Due Custom Serial I/O : PORTC pin mapping (from msb to lsb)
  * 
- * 27 26 39 38   21 20 23 22   16 17 41 40   15 14 18 19   X X 25 24   X X X X   X X X X   0 1 X X
-                                       SCLK  |MOSI PINS|
+ * X LEDRX 10 3   X 4 5 6   7 8 9 X   44 45 46 47   48 49 50 51   X X 41 40   39 38 37 36   35 34 33 X
+                                              SCLK  |MOSI PINS|
  *                                                                        
  */
 
@@ -51,14 +47,39 @@ const byte c_IOUpdate  = 5;              // output to DUC   /  data I/O update
 const byte c_ChipSel   = 52;             // output to DUC   /  DUC chip select
 const byte c_HardResetInterrupt = 37;    // input           /  trigger DUC hard reset routine
 const byte c_SoftResetInterrupt = 36;    // input           /  trigger MCU soft reset routine
+const byte c_singleSPInterrupt  = 35;    // input           /  trigger single-SPI activation routine
+const byte c_quadSPInterrupt    = 34;    // input           /  trigger quad-SPI activation routine
 const byte c_UpdateInterrupt    = 33;    // input           /  trigger DUC update routine
 
+
 // standard SPI library [Hz]
+const bool c_stdSPI = false;
 const unsigned int spi_fsclk = 60000000;
 
-// AD9959 DAC channels
-#define c_Mask8Nibble04 0b11110000       // nibble masks (channel decode)
+// custom SPI
+const byte c_QuadSPIPins[5] = {51, 50, 49, 48, 47};   // SDIO pins ordered from msb to lsb + SCLK
+const byte c_QuadSclkDiv = 1;                         // SCLK divider
+bool g_QuadSPIActive = false;                         // SPI modality                           
+#define c_SafeClearPIOCBit5(n)  (n & 0xfffe0fff)      // safe-clear mask for PORTC pins
+                                                      // 1111 1111 1110 0000 1111 1111 1111 1111
+#define c_SclkHigh 0b00000000000000010000000000000000 // serial clock pin mask
+#define c_Mask8Nibble04 0b11110000                    // nibble masks
 #define c_Mask8Nibble14 0b00001111
+#define c_Mask8Nibble02 0b11000000
+#define c_Mask8Nibble12 0b00110000
+#define c_Mask8Nibble22 0b00001100
+#define c_Mask8Nibble32 0b00000011
+#define c_Mask8Nibble01 0b10000000
+#define c_Mask8Nibble11 0b01000000
+#define c_Mask8Nibble21 0b00100000
+#define c_Mask8Nibble31 0b00010000
+#define c_Mask8Nibble41 0b00001000
+#define c_Mask8Nibble51 0b00000100
+#define c_Mask8Nibble61 0b00000010
+#define c_Mask8Nibble71 0b00000001
+#define c_ReadMask 0x80
+
+// AD9959 DAC channels
 const unsigned int c_Nch = 4;
 const byte c_chSel0 = 0b00010000;        // channel selection bytes
 const byte c_chSel1 = 0b00100000;
@@ -87,7 +108,6 @@ const byte c_SelSize = 2;
 const byte c_FR1Size = 4;
 const byte c_CFRSize = 6;
 
-
 // PC USB serial communication
 bool g_timeit = false;
 unsigned long g_strTime = 0;          // string transfer time
@@ -98,7 +118,7 @@ unsigned long g_currenTime;
 unsigned long g_starTime;
 volatile unsigned long g_byteCount = 0;
 
-const unsigned int c_maxSize = 4500;  // max buffer size
+const unsigned int c_maxSize = 850;  // max buffer size
 using stringBuffer = CircularBuffer<String, c_maxSize>;
 String g_inString  = "";              // incoming instruction string
 stringBuffer g_inStringBuffer;        // input string FIFO buffer
@@ -144,16 +164,16 @@ CircularBuffer<byte, c_maxSize * c_Nch> g_bufferLinearSweepMode;
 
 
 // message strings
-char c_pcUSBMsg[] PROGMEM = "\n * PC >>> MCU serial communication established!";
-char c_softRMsg[] PROGMEM = "\n * MCU ""soft"" reset!";
-char c_hardRMsg[] PROGMEM = "\n * DUC ""hard"" reset!";
-char c_quSPIMsg[] PROGMEM = "\n * MCU >>> DUC quad-SPI communication activated!";
-char c_sgSPIMsg[] PROGMEM = "\n * MCU >>> DUC single-SPI communication activated!";
-char c_chErrMsg[] PROGMEM = "\n * No DDS channel selected: corrupted channel programming routine!";
-char c_inMemMsg[] PROGMEM = "\n * Max memory reached! Ignoring input instruction strings...";
-char c_inStrMsg[] PROGMEM = "\n * String buffer full! Ignoring input instruction strings...";
-char c_STModMsg[] PROGMEM = "     Single-Tone mode";
-char c_LSModMsg[] PROGMEM = "     Linear Sweep mode";
+char c_pcUSBMsg[] = "\n * PC >>> MCU serial communication established!";
+char c_softRMsg[] = "\n * MCU ""soft"" reset!";
+char c_hardRMsg[] = "\n * DUC ""hard"" reset!";
+char c_quSPIMsg[] = "\n * Quad-SPI active!";
+char c_sgSPIMsg[] = "\n * Single-SPI active!";
+char c_chErrMsg[] = "\n * No DDS channel selected: corrupted channel programming routine!";
+char c_inMemMsg[] = "\n * Max memory reached! Ignoring input instruction strings...";
+char c_inStrMsg[] = "\n * String buffer full! Ignoring input instruction strings...";
+char c_STModMsg[] = "     Single-Tone mode";
+char c_LSModMsg[] = "     Linear Sweep mode";
 
 
 // Board functions
@@ -190,7 +210,7 @@ void setup(){
  * MCU board loop function (executed continuously)
  * . listen to USB serial communication
  */
-void loop(){ 
+void loop(){
 
   // listen to USB serial port
   readSerialPort();
@@ -209,17 +229,14 @@ void loop(){
  */
 void readSerialPort(){
 
-  if (Serial.available()){
+  if (SerialUSB.available()){
 
     // get incoming char(s)
-    char inChar = (char)Serial.read();
+    char inChar = (char)SerialUSB.read();
     g_byteCount++;
 
     // start communication timer
     if (g_endCOM){
-
-      // wait for serial prints when debugging (1 s)
-      if (g_timeit) delay(1000);
 
       // deactivate interrupts
       deactivateISR();
@@ -286,9 +303,6 @@ void decodeDataString(){
     // strings available for decoding
     if (!g_inStringBuffer.isEmpty()){
       
-      // wait for serial prints when debugging (1 s)
-      if (g_debug) delay(1000);
-
       // input timing mode
       if (g_timeit) g_strTime = micros();
 
@@ -598,18 +612,36 @@ void initDigitalPins(){
 
   // set master reset pin as output, set it LOW
   pinMode(c_HardReset, OUTPUT);
-  digitalWriteFast(c_HardReset, LOW);
+  digitalWrite(c_HardReset, LOW);
 
   // set power down pin as output, set it LOW
   // (DUC external power-down control is unused)
   pinMode(c_PwnDwn, OUTPUT);
-  digitalWriteFast(c_PwnDwn, LOW);
+  digitalWrite(c_PwnDwn, LOW);
 
   // set I/O update pin as output, set it LOW
   pinMode(c_IOUpdate, OUTPUT);
+  digitalWrite(c_IOUpdate, LOW);
 
-  // set SPI communication pins
-  SPI.begin();
+  // initialize standard SPI
+  if (c_stdSPI) SPI.begin();
+  // initialize custom SPI
+  else{
+    // set chip select pin as output (active LOW), set it HIGH
+    pinMode(c_ChipSel, OUTPUT);
+    digitalWrite(c_ChipSel, HIGH);
+
+    // set SPI communication pins
+    for (byte i = 0; i < 5; i++){
+        pinMode(c_QuadSPIPins[i], OUTPUT);
+        digitalWrite(c_QuadSPIPins[i], LOW);
+    }
+
+    // set DUC update interrupt pins as input
+    pinMode(c_singleSPInterrupt, INPUT_PULLUP);
+    pinMode(c_quadSPInterrupt, INPUT_PULLUP);
+
+  }
 
   // set DUC update interrupt pins as input
   pinMode(c_UpdateInterrupt, INPUT_PULLUP);
@@ -624,7 +656,13 @@ void initDigitalPins(){
  */
 void initSerialUSB(){
 
+  // initialize serial monitor (max baud rate: 115200 b/s)
   Serial.begin(115200);
+
+  // initialize serial communication on the Arduino Due Native USB port (max baud rate: 2000000 b/s)
+  SerialUSB.begin(2000000); 
+
+  // provide feedback
   if (!g_clientCXN){
     Serial.println(c_pcUSBMsg);
     g_clientCXN = true;
@@ -674,10 +712,7 @@ void clearFTWBuffers(){
  * MCU board re-initialization ("soft" reset): triggered when the c_SoftResetInterrupt pin goes from low to high.
  */
 void softResetMCU(){
-  
-  // print to serial monitor
-  Serial.println(c_softRMsg);
-  
+ 
   // reset state variables
   g_endCOM = true;
   g_byteCount = 0;
@@ -687,6 +722,10 @@ void softResetMCU(){
   // clear FTW buffers
   clearFTWBuffers();
 
+  // print to serial monitor
+  Serial.println(c_softRMsg);
+  delay(2000);
+
 }
 
 
@@ -695,19 +734,20 @@ void softResetMCU(){
  */
 void hardResetDUC(){
 
-  // print to serial monitor
-  Serial.println(c_hardRMsg);
-
   // issue a master reset pulse (1μs)
-  digitalWriteFast(c_HardReset, HIGH);
+  digitalWrite(c_HardReset, HIGH);
   delayMicroseconds(1);
-  digitalWriteFast(c_HardReset, LOW);
+  digitalWrite(c_HardReset, LOW);
 
   // all channels in single-tone mode
   g_sweepCh = 0b00000000;
 
   // set Function Register 1 (g_SysClk = c_PLLMul * c_RefClk, Vco gain HIGH)
   if (c_ClkMultiplier) setPLLMultiplier();
+
+  // print to serial monitor
+  Serial.println(c_hardRMsg);
+  delay(2000);
 
 }
 
@@ -754,6 +794,82 @@ void updateDUC(){
 
 
 /**
+ * Initialize quad-bit SPI communication.
+ */
+void initQuadSPI(){ 
+
+  // if quad-bit SPI not already active
+  if (g_QuadSPIActive == false){
+
+    // transfer 00000000 00000110 via "custom" single-bit SPI
+    byte initSize = 2;
+    byte bufferInitSPI[initSize];
+    bufferInitSPI[0] = c_CSR;
+    bufferInitSPI[1] = 0b11110110;
+
+    // select slave device
+    digitalWrite(c_ChipSel, LOW);
+
+    // send data via single-bit SPI
+    singleSPIBufferTransfer(bufferInitSPI, initSize);
+
+    // de-select DUC
+    digitalWrite(c_ChipSel, HIGH);
+
+    // issue an I/O update for changing the serial mode bits
+    ioUpdate();
+
+    // quad-bit SPI is now active
+    g_QuadSPIActive = true;
+
+    // print to serial monitor
+    Serial.println(c_quSPIMsg);
+    delay(2000);
+
+  }
+
+}
+
+
+/**
+ * Initialize single-bit SPI communication.
+ */
+void initSingleSPI(){ 
+
+  // if single-bit SPI not already active
+  if (g_QuadSPIActive){
+
+    // transfer 00000000 11110000 via "custom" quad-bit SPI
+    byte initSize = 2;
+    byte bufferInitSPI[initSize];
+    bufferInitSPI[0] = c_CSR;
+    bufferInitSPI[1] = 0b11110000;
+    
+    // select slave device
+    digitalWrite(c_ChipSel, LOW);
+
+    // send data via quad-SPI
+    quadSPIBufferTransfer(bufferInitSPI, initSize);
+
+    // de-select DUC
+    digitalWrite(c_ChipSel, HIGH);
+
+    // issue an I/O update for changing the serial mode bits
+    ioUpdate();
+
+    //single-bit SPI is now active
+    g_QuadSPIActive = false;
+
+    // print to serial monitor
+    Serial.println(c_sgSPIMsg);
+    delay(2000);
+
+  }
+
+}
+
+
+/**
  * Activate external interrupt service routines.
  */
 void activateISR(){
@@ -761,6 +877,11 @@ void activateISR(){
   attachInterrupt(digitalPinToInterrupt(c_UpdateInterrupt), updateDUC, RISING);
   attachInterrupt(digitalPinToInterrupt(c_HardResetInterrupt), hardResetDUC, RISING);
   attachInterrupt(digitalPinToInterrupt(c_SoftResetInterrupt), softResetMCU, RISING);
+
+  if (!c_stdSPI){
+    attachInterrupt(digitalPinToInterrupt(c_singleSPInterrupt), initSingleSPI, RISING);
+    attachInterrupt(digitalPinToInterrupt(c_quadSPInterrupt), initQuadSPI, RISING);
+  }
 
 }
 
@@ -773,6 +894,11 @@ void deactivateISR(){
   detachInterrupt(digitalPinToInterrupt(c_UpdateInterrupt));
   detachInterrupt(digitalPinToInterrupt(c_HardResetInterrupt));
   detachInterrupt(digitalPinToInterrupt(c_SoftResetInterrupt));
+
+  if (!c_stdSPI){
+    detachInterrupt(digitalPinToInterrupt(c_singleSPInterrupt));
+    detachInterrupt(digitalPinToInterrupt(c_quadSPInterrupt));
+  }
 
 }
 
@@ -848,7 +974,9 @@ void spiTransferChST(byte ch, unsigned int FTW){
   selectDDSChannels(ch);
 
   // transfer data to DUC via standard SPI
-  SPIBufferTransfer(bufferFTWST, sizeST);
+  if (c_stdSPI) SPIBufferTransfer(bufferFTWST, sizeST);
+  // ... or custom SPI
+  else customSPIBufferTransfer(bufferFTWST, sizeST);
 
 }
 
@@ -907,7 +1035,9 @@ void spiTransferChLS(byte ch, unsigned int FTW0, unsigned int FTW1,
   selectDDSChannels(ch);
 
   // transfer data to DUC via standard SPI
-  SPIBufferTransfer(bufferFTWLS, sizeLS);
+  if (c_stdSPI) SPIBufferTransfer(bufferFTWLS, sizeLS);
+  // ... or custom SPI
+  else customSPIBufferTransfer(bufferFTWLS, sizeLS);
 
 }
 
@@ -931,7 +1061,13 @@ void activateChSTM(byte chSelMask){
   bufferCFR[5] = 0x00;
 
   // transfer data to DUC via standard SPI
-  SPIBufferTransfer(bufferCFR, c_CFRSize);
+  if (c_stdSPI) SPIBufferTransfer(bufferCFR, c_CFRSize);
+  // ... or custom SPI
+  else{
+    // adjust serial mode bits
+    if (g_QuadSPIActive) bufferCFR[1] = bufferCFR[1] | 0b00000110;
+    customSPIBufferTransfer(bufferCFR, c_CFRSize);
+  }
 
   // issue an I/O update pulse: CFR is set
   ioUpdate();
@@ -961,7 +1097,13 @@ void activateChLSM(byte chSelMask){
   bufferCFR[5] = 0b00000000;    // CFR[7:0]    (DEFAULT VALUE: 0x02)
 
   // transfer data to DUC via standard SPI
-  SPIBufferTransfer(bufferCFR, c_CFRSize);
+  if (c_stdSPI) SPIBufferTransfer(bufferCFR, c_CFRSize);
+  // ... or custom SPI
+  else{
+    // adjust serial mode bits
+    if (g_QuadSPIActive) bufferCFR[1] = bufferCFR[1] | 0b00000110;
+    customSPIBufferTransfer(bufferCFR, c_CFRSize);
+  }
 
   // issue an I/O update pulse: CFR is set
   ioUpdate();
@@ -1001,7 +1143,13 @@ void selectDDSChannels(byte ch){
   }
 
   // transfer data to DUC via standard SPI
-  SPIBufferTransfer(bufferChSel, c_SelSize);
+  if (c_stdSPI) SPIBufferTransfer(bufferChSel, c_SelSize);
+  // ... or custom SPI
+  else{
+    // adjust serial mode bits
+    if (g_QuadSPIActive) bufferChSel[1] = bufferChSel[1] | 0b00000110;
+    customSPIBufferTransfer(bufferChSel, c_SelSize);
+  }
 
 }
 
@@ -1016,13 +1164,90 @@ void selectDDSChannels(byte ch){
  */
 void SPIBufferTransfer(byte buffer[], unsigned int buffer_size){
 
-  digitalWriteFast(c_ChipSel, LOW);
   SPI.beginTransaction(SPISettings(spi_fsclk, MSBFIRST, SPI_MODE0));
-  SPI.transfer(buffer, buffer_size);
-  digitalWriteFast(c_ChipSel, HIGH);
+  digitalWrite(c_ChipSel, LOW);
+  for (unsigned int b = 0; b < buffer_size; b++) SPI.transfer(buffer[b]);
+  digitalWrite(c_ChipSel, HIGH);
   SPI.endTransaction();
 
 }
+
+
+
+
+// Custom SPI functions
+/**
+ * Custom SPI buffer transfer using digital port mapping.
+ * @param[in] buffer input buffer to be transferred
+ * @param[in] buffer_size buffer size in bytes
+ */
+void customSPIBufferTransfer(byte buffer[], unsigned int buffer_size){
+
+  digitalWrite(c_ChipSel, LOW);
+  if (g_QuadSPIActive) quadSPIBufferTransfer(buffer, buffer_size);
+  else singleSPIBufferTransfer(buffer, buffer_size);
+  digitalWrite(c_ChipSel, HIGH);
+
+}
+
+
+/**
+ * Custom single-bit SPI byte transfer (with serial clock divider).
+ * @param[in] data input byte to be transferred
+ */
+void singleSPIByteTransfer(byte data){
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble01) << 5);
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble01) << 5)  | c_SclkHigh; 
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble11) << 6);
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble11) << 6) | c_SclkHigh; 
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble21) << 7);
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble21) << 7) | c_SclkHigh;
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble31) << 8);
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble31) << 8) | c_SclkHigh;
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble41) << 9);
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble41) << 9) | c_SclkHigh; 
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble51) << 10);
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble51) << 10) | c_SclkHigh; 
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble61) << 11);
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble61) << 11) | c_SclkHigh;
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble71) << 12);
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble71) << 12) | c_SclkHigh;
+}
+
+
+/**
+ * Custom quad-bit SPI byte transfer (with serial clock divider).
+ * @param[in] data input byte to be transferred
+ */
+void quadSPIByteTransfer(byte data){
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble04) << 8);                        
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble04) << 8) | c_SclkHigh;
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble14) << 12);
+  for (byte i = 0; i < c_QuadSclkDiv; i++) REG_PIOC_ODSR = ((data & c_Mask8Nibble14) << 12) | c_SclkHigh;
+}
+
+
+/**
+ * Custom single-bit SPI buffer transfer (with serial clock divider).
+ * @param[in] buffer input buffer to be transferred
+ * @param[in] buffer_size buffer size in bytes
+ */
+void singleSPIBufferTransfer(byte buffer[], unsigned int buffer_size){
+  for (unsigned int b = 0; b < buffer_size; b++) singleSPIByteTransfer(buffer[b]);
+  REG_PIOC_ODSR = c_SafeClearPIOCBit5(REG_PIOC_ODSR);
+}
+
+
+/**
+ * Custom quad-bit SPI buffer transfer (with serial clock divider).
+ * @param[in] buffer input buffer to be transferred
+ * @param[in] buffer_size buffer size in bytes
+ */
+void quadSPIBufferTransfer(byte buffer[], unsigned int buffer_size){
+  for (unsigned int b = 0; b < buffer_size; b++) quadSPIByteTransfer(buffer[b]);
+  REG_PIOC_ODSR = c_SafeClearPIOCBit5(REG_PIOC_ODSR);
+}
+
 
 
 
@@ -1096,21 +1321,24 @@ void printSerialCOM(){
   // get current time
   g_currenTime = micros();
 
-  // wait for serial monitor to be opened (2 s)
-  if (g_debug) delay(2000);
-
-  // info  
+  // get serial info  
   float elapsed = (g_currenTime - g_starTime) * 0.001;
+  float rate = (float) g_byteCount / elapsed;
+
+  // print to serial monitor
   Serial.print(F("\n * PC >>> MCU serial communication complete!\n"));
   Serial.print(F("   Received: "));
   Serial.print(g_byteCount);
   Serial.print(F(" B, "));
   Serial.print(elapsed);
   Serial.print(F(" ms"));
-  float rate = (float) g_byteCount / elapsed;
   Serial.print(F(", rate = "));
   Serial.print(rate);
-  Serial.println(F(" kB/s\n"));  
+  Serial.println(F(" kB/s\n"));
+  delay(2000);
+
+  // reset incoming byte count
+  g_byteCount = 0;
 
 }
 
@@ -1131,8 +1359,13 @@ void printByte(byte B){
  * Print data string transfer time to serial monitor.
  */
 void printReadTime(){
-  char str[50];
-  Serial.println(snprintf(str, 50, "\n * String %d serial time: %luus", g_strIn, micros() - g_strTime));
+  unsigned long t = micros();
+  byte len = 50;
+  char str[len];
+  snprintf(str, len, "\n * String %d serial time: %lu us", g_strIn, t - g_strTime);
+  Serial.println(str);
+
+  delay(1500);
   g_strIn++;
   g_strTime = micros();
 }
@@ -1142,9 +1375,13 @@ void printReadTime(){
  * Print data string decoding time to serial monitor.
  */
 void printDecodeTime(){
-  char str[50];
-  snprintf(str, 50, " * String %d decode time: %luus\n", g_numIn, micros() - g_strTime);
+  unsigned long t = micros();
+  byte len = 50;
+  char str[len];
+  snprintf(str, len, " * String %d decode time: %lu us\n", g_numIn, t - g_strTime);
   Serial.println(str);
+
+  delay(1500);
 }
 
 
