@@ -404,7 +404,8 @@ void storeParsedValues(byte cfgHdr){
   // debug mode
   if (g_debug){
     char str[30];
-    Serial.println(snprintf(str, 30, "\n * %d >>> MCU\n", g_numIn));
+    snprintf(str, 30, "\n * %d >>> MCU\n", g_numIn);
+    Serial.println(str);
   }
 
   // backward loop over channels (from 3 to 0)
@@ -417,7 +418,8 @@ void storeParsedValues(byte cfgHdr){
       // debug mode
       if (g_debug){
         char strCh[15];
-        Serial.print(snprintf(strCh, 15, " . Channel %u: ", ch));
+        snprintf(strCh, 15, " . Channel %u: ", ch);
+        Serial.print(strCh);
       } 
 
       // check channel mode bit in cfgHdr (0: STM; 1: LSM)
@@ -587,12 +589,7 @@ void setPLLMultiplier(){
   // transfer word to DDS via standard SPI
   if (c_stdSPI) SPIBufferTransfer(bufferFR1, c_FR1Size);
   // ... or custom SPI
-  else{
-    digitalWriteFast(c_ChipSel, LOW);
-    if (g_QuadSPIActive) quadSPIBufferTransfer(bufferFR1, c_FR1Size);
-    else singleSPIBufferTransfer(bufferFR1, c_FR1Size);
-    digitalWriteFast(c_ChipSel, HIGH);
-  }
+  else customSPIBufferTransfer(bufferFR1, c_FR1Size);
 
   // issue an I/O update pulse: FR1 register is set
   ioUpdate();
@@ -768,7 +765,8 @@ void updateDUC(){
   // debug mode
   if (g_debug){
     char str[30];
-    Serial.println(snprintf(str, 30, "\n * %d >>> DUC\n", g_numOut));
+    snprintf(str, 30, "\n * %d >>> DUC\n", g_numOut);
+    Serial.println(str);
   }
 
   // activate channel operation modes (updated channels only)
@@ -1401,12 +1399,13 @@ void printUint(unsigned int UI){
  */
 void printSingleTone(unsigned int FTW){
 
-  char str[60];
+  byte len = 60;
+  char str[len];
 
   Serial.print(F("   FTW:            "));
   printUint(FTW);
 
-  sprintf(str, "   f  [MHz]:       %.6f\n", decodeFrequency(FTW));
+  snprintf(str, len, "   f  [MHz]:       %.6f\n", decodeFrequency(FTW));
   Serial.println(str);
 
 }
@@ -1417,7 +1416,8 @@ void printSingleTone(unsigned int FTW){
  */
 void printLinearSweep(unsigned int FTW0, unsigned int FTW1, unsigned int RDW, unsigned int FDW, byte RSRR, byte FSRR){
 
-  char  str[60];
+  byte len = 60;
+  char  str[len];
   float df;
   float dt;
 
@@ -1425,25 +1425,30 @@ void printLinearSweep(unsigned int FTW0, unsigned int FTW1, unsigned int RDW, un
   Serial.println(F("   Start"));
   Serial.print(F("   FTW0:           "));
   printUint(FTW0);
-  Serial.println(snprintf(str, 60,   "   f  [MHz]:       %.6f\n", decodeFrequency(FTW0)));
+  snprintf(str, len,   "   f  [MHz]:       %.6f\n", decodeFrequency(FTW0));
+  Serial.println(str);
 
   // frequency sweep end frequency
   Serial.println(F("   End"));
   Serial.print(F("   FTW1:           "));
   printUint(FTW0);
-  Serial.println(snprintf(str, 60,   "   f  [MHz]:       %.6f\n", decodeFrequency(FTW1)));
+  snprintf(str, len,   "   f  [MHz]:       %.6f\n", decodeFrequency(FTW1));
+  Serial.println(str);
 
   // rising frequency sweep phase
   df = decodeFrequency(RDW);
   dt = decodeSweepRampRate(RSRR);
   Serial.println(F("   Rise"));
   Serial.print(F("   RDW:            "));
-  printUint(RDW);  
-  Serial.print(snprintf(str, 60, "   df [MHz]:       %.9f\n", df));
+  printUint(RDW);
+  snprintf(str, len, "   df [MHz]:       %.9f\n", df);
+  Serial.print(str);
   Serial.print(F("   RSRR:           "));
   printByte(RSRR);
-  Serial.print(snprintf(str, 60, "   dt  [us]:       %.3f\n", dt));
-  Serial.println(snprintf(str, 60, "   chirp [MHz/us]: %.6f\n", df/dt));
+  snprintf(str, len, "   dt  [us]:       %.3f\n", dt);
+  Serial.print(str);
+  snprintf(str, len, "   chirp [MHz/us]: %.6f\n", df/dt);
+  Serial.println(str);
 
   // falling frequency sweep phase
   df = decodeFrequency(FDW);
@@ -1451,10 +1456,13 @@ void printLinearSweep(unsigned int FTW0, unsigned int FTW1, unsigned int RDW, un
   Serial.println(F("   Fall"));
   Serial.print(F("   FDW:            "));
   printUint(FDW);
-  Serial.print(snprintf(str, 60, "   df [MHz]:       %.9f\n", df));
+  snprintf(str, len, "   df [MHz]:       %.9f\n", df);
+  Serial.print(str);
   Serial.print(F("   FSRR:           "));
   printByte(FSRR);
-  Serial.print(snprintf(str, 60, "   dt  [us]:       %.3f\n", dt));
-  Serial.println(snprintf(str, 60, "   chirp [MHz/us]: %.6f\n", df/dt));           
+  snprintf(str, len, "   dt  [us]:       %.3f\n", dt);
+  Serial.print(str);
+  snprintf(str, len, "   chirp [MHz/us]: %.6f\n", df/dt);
+  Serial.println(str);
 
 }
