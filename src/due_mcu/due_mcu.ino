@@ -57,7 +57,7 @@ const bool c_stdSPI = false;
 const unsigned int spi_fsclk = 60000000;
 
 // custom SPI
-const byte c_QuadSPIPins[5] = {51, 50, 49, 48, 47};   // SDIO pins ordered from msb to lsb + SCLK
+const byte c_QuadSPIPins[5] = {48, 49, 50, 51, 47};   // SDIO pins ordered from msb to lsb + SCLK
 const byte c_QuadSclkDiv = 1;                         // SCLK divider
 bool g_QuadSPIActive = false;                         // SPI modality                           
 #define c_SafeClearPIOCBit5(n)  (n & 0xfffe0fff)      // safe-clear mask for PORTC pins
@@ -1171,7 +1171,7 @@ void SPIBufferTransfer(byte buffer[], unsigned int buffer_size){
 
   SPI.beginTransaction(SPISettings(spi_fsclk, MSBFIRST, SPI_MODE0));
   digitalWrite(c_ChipSel, LOW);
-  for (unsigned int b = 0; b < buffer_size; b++) SPI.transfer(buffer[b]);
+  SPI.transfer(&buffer, buffer_size);
   digitalWrite(c_ChipSel, HIGH);
   SPI.endTransaction();
 

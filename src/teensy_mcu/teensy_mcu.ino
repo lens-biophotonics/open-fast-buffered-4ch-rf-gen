@@ -1170,7 +1170,7 @@ void SPIBufferTransfer(byte buffer[], unsigned int buffer_size){
 
   SPI.beginTransaction(SPISettings(spi_fsclk, MSBFIRST, SPI_MODE0));
   digitalWriteFast(c_ChipSel, LOW);  
-  for (unsigned int b = 0; b < buffer_size; b++) SPI.transfer(buffer[b]);
+  SPI.transfer(&buffer, buffer_size);
   digitalWriteFast(c_ChipSel, HIGH);
   SPI.endTransaction();
 
